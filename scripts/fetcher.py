@@ -5,6 +5,7 @@ import numpy as np
 from geometry_msgs.msg import PoseArray
 from sensor_msgs.msg import JointState
 from teleop_fetch.msg import HeadCommand
+from ros_robot_controller.msg import SetBusServosPosition, BusServoPosition
 
 
 class TeleopFetcher:
@@ -26,6 +27,9 @@ class TeleopFetcher:
         # Публикаторы для управления головой
         self.head_pan_pub = rospy.Publisher('/head_pan_controller/command', HeadCommand, queue_size=1)
         self.head_tilt_pub = rospy.Publisher('/head_tilt_controller/command', HeadCommand, queue_size=1)
+        
+        # Публикатор для управления руками робота
+        self.arms_pub = rospy.Publisher('/ros_robot_controller/bus_servo/set_position', SetBusServosPosition, queue_size=1)
         
         # Подписчики на данные от VR гарнитуры
         rospy.Subscriber('/quest/poses', PoseArray, self.pose_callback, queue_size=10)
@@ -51,6 +55,23 @@ class TeleopFetcher:
             'right_b': 0.0
         }
         
+        # Стартовые позиции для рук робота
+        self.arm_start_positions = {
+            # Правая рука
+            14: 126,   # Правое плечо, вперед-назад
+            16: 167,   # Правое плечо вверх-вниз
+            18: 498,   # Правое предплечье поворот
+            20: 956,   # Правое предплечье сгибание локтя
+            22: 500,   # Правый захват руки (сжимает/разжимает руку)
+            
+            # Левая рука
+            13: 874,   # Левое плечо вперед-назад
+            15: 833,   # Левое плечо вверх-вниз
+            17: 502,   # Левое предплечье поворот
+            19: 44,    # Левое предплечье сгибание локтя
+            21: 500    # Левый захват руки (сжимает/разжимает руку)
+        }
+        
         rospy.loginfo("TeleopFetcher нода инициализирована")
         rospy.loginfo(f"Чувствительность головы: {self.head_sensitivity}")
         rospy.loginfo(f"Максимальный поворот головы: ±{self.max_head_pan}")
@@ -59,6 +80,9 @@ class TeleopFetcher:
         rospy.loginfo("  - /quest/poses: данные о положении головы и рук оператора")
         rospy.loginfo("  - /quest/joints: данные о кнопках и джойстиках VR контроллеров")
         rospy.loginfo("Готов к получению данных от VR гарнитуры Quest")
+        
+        # Устанавливаем начальную позу рук
+        self.set_arms_to_start_position()
     
     def pose_callback(self, pose_array):
         """
@@ -267,6 +291,38 @@ class TeleopFetcher:
         # Здесь будет логика преобразования положения рук оператора
         # в команды управления руками робота
         pass
+    
+    def set_arms_to_start_position(self):
+        """
+        Устанавливает руки робота в стартовую позицию.
+        Отправляет команды на все сервоприводы рук с заданными позициями.
+        """
+        rospy.loginfo("Установка рук робота в стартовую позицию...")
+        
+        # Создаем сообщение для установки позиций сервоприводов
+        arm_msg = SetBusServosPosition()
+        arm_msg.duration = 0.1  # Время на перемещение в секундах
+        
+        # Создаем список позиций для всех сервоприводов рук
+        positions = []
+        for servo_id, position in self.arm_start_positions.items():
+            servo_pos = BusServoPosition()
+            servo_pos.id = servo_id
+            servo_pos.position = position
+            positions.append(servo_pos)
+            
+            rospy.loginfo(f"Сервопривод ID{servo_id}: позиция {position}")
+        
+        arm_msg.position = positions
+        
+        # Отправляем команду
+        self.arms_pub.publish(arm_msg)
+        rospy.loginfo("Команда установки стартовой позы рук отправлена")
+        rospy.loginfo(f"Установлено {len(positions)} сервоприводов")
+        
+        # Ждем завершения движения
+        rospy.sleep(arm_msg.duration + 0.5)  # Небольшая задержка для завершения
+        rospy.loginfo("Стартовая поза рук установлена")
     
     def run(self):
         """
