@@ -39,10 +39,26 @@ class TeleopFetcher:
         self.operator_head_pose = None
         self.operator_head_orientation = None
         
+        # Данные о состоянии VR контроллеров
+        self.vr_controllers_state = {
+            'left_grip': 0.0,
+            'left_index': 0.0,
+            'left_x': 0.0,
+            'left_y': 0.0,
+            'right_grip': 0.0,
+            'right_index': 0.0,
+            'right_a': 0.0,
+            'right_b': 0.0
+        }
+        
         rospy.loginfo("TeleopFetcher нода инициализирована")
         rospy.loginfo(f"Чувствительность головы: {self.head_sensitivity}")
         rospy.loginfo(f"Максимальный поворот головы: ±{self.max_head_pan}")
         rospy.loginfo(f"Максимальный наклон головы: ±{self.max_head_tilt}")
+        rospy.loginfo("Подписка на топики:")
+        rospy.loginfo("  - /quest/poses: данные о положении головы и рук оператора")
+        rospy.loginfo("  - /quest/joints: данные о кнопках и джойстиках VR контроллеров")
+        rospy.loginfo("Готов к получению данных от VR гарнитуры Quest")
     
     def pose_callback(self, pose_array):
         """
@@ -71,13 +87,44 @@ class TeleopFetcher:
     def joints_callback(self, joint_state):
         """
         Обработка данных о суставах рук оператора.
-        Пока не используется, но готова для будущего расширения.
+        Обрабатывает данные о кнопках и джойстиках VR контроллеров.
+        
+        Ожидаемые данные:
+        - L_grip, L_index: левый контроллер (хватка и триггер)
+        - R_grip, R_index: правый контроллер (хватка и триггер)  
+        - L_X, L_Y: левые кнопки (X и Y кнопки)
+        - R_A, R_B: правые кнопки (A и B кнопки)
         """
         if joint_state.name and joint_state.position:
             joint_dict = dict(zip(joint_state.name, joint_state.position))
-            # TODO: Обработка данных о суставах рук
-            # rospy.loginfo_throttle(1, f"Получены данные о суставах: {len(joint_dict)} суставов")
-            pass
+            
+            # Извлекаем данные о контроллерах
+            left_grip = joint_dict.get('L_grip', 0.0)
+            left_index = joint_dict.get('L_index', 0.0)
+            right_grip = joint_dict.get('R_grip', 0.0)
+            right_index = joint_dict.get('R_index', 0.0)
+            
+            # Извлекаем данные о кнопках
+            left_x = joint_dict.get('L_X', 0.0)
+            left_y = joint_dict.get('L_Y', 0.0)
+            right_a = joint_dict.get('R_A', 0.0)
+            right_b = joint_dict.get('R_B', 0.0)
+            
+            # Логируем полученные данные (с ограничением частоты)
+            rospy.loginfo_throttle(2, 
+                f"VR контроллеры - Левый: grip={left_grip:.2f}, index={left_index:.2f}, "
+                f"кнопки X={left_x:.2f}, Y={left_y:.2f} | "
+                f"Правый: grip={right_grip:.2f}, index={right_index:.2f}, "
+                f"кнопки A={right_a:.2f}, B={right_b:.2f}"
+            )
+            
+            # TODO: Добавить обработку команд для управления руками робота
+            # Здесь можно будет использовать данные о кнопках контроллеров
+            # для управления захватом, движением рук и т.д.
+            self.process_vr_controller_input(
+                left_grip, left_index, left_x, left_y,
+                right_grip, right_index, right_a, right_b
+            )
     
     def process_head_control(self):
         """
@@ -159,9 +206,61 @@ class TeleopFetcher:
         # Логируем команды (с ограничением частоты)
         rospy.loginfo_throttle(0.5, f"Команды головы - Pan: {pan:.3f}, Tilt: {tilt:.3f}, Duration: {self.movement_duration}")
     
+    def process_vr_controller_input(self, left_grip, left_index, left_x, left_y, 
+                                   right_grip, right_index, right_a, right_b):
+        """
+        Обработка входных данных от VR контроллеров.
+        
+        Args:
+            left_grip, left_index: левый контроллер (хватка и триггер)
+            left_x, left_y: левые кнопки (X и Y кнопки)
+            right_grip, right_index: правый контроллер (хватка и триггер)
+            right_a, right_b: правые кнопки (A и B кнопки)
+        """
+        # Сохраняем текущее состояние контроллеров
+        self.vr_controllers_state.update({
+            'left_grip': left_grip,
+            'left_index': left_index,
+            'left_x': left_x,
+            'left_y': left_y,
+            'right_grip': right_grip,
+            'right_index': right_index,
+            'right_a': right_a,
+            'right_b': right_b
+        })
+        
+        # TODO: Реализовать обработку команд от VR контроллеров
+        # Примеры возможного использования:
+        
+        # 1. Управление захватом рук робота
+        # if left_grip > 0.5:  # Хватка левой руки
+        #     self.control_left_gripper(left_grip)
+        # if right_grip > 0.5:  # Хватка правой руки
+        #     self.control_right_gripper(right_grip)
+        
+        # 2. Управление функциональными кнопками
+        # if left_x > 0.5:  # Кнопка X - функция левой руки
+        #     self.execute_left_hand_function_x()
+        # if left_y > 0.5:  # Кнопка Y - функция левой руки
+        #     self.execute_left_hand_function_y()
+        
+        # 3. Функциональные кнопки правого контроллера
+        # if right_a > 0.5:  # Кнопка A - какая-то функция
+        #     self.execute_function_a()
+        # if right_b > 0.5:  # Кнопка B - другая функция
+        #     self.execute_function_b()
+        
+        # 4. Триггеры для точных действий
+        # if left_index > 0.5:  # Левый триггер
+        #     self.execute_precise_action_left()
+        # if right_index > 0.5:  # Правый триггер
+        #     self.execute_precise_action_right()
+        
+        pass
+    
     def process_arms_control(self, left_hand_pose, right_hand_pose):
         """
-        Обработка управления руками робота.
+        Обработка управления руками робота на основе положения рук оператора.
         Пока не реализовано, но структура готова для будущего расширения.
         """
         # TODO: Реализовать управление руками
