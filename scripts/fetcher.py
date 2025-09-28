@@ -55,8 +55,9 @@ class TeleopFetcher:
             'right_b': 0.0
         }
         
-        # Состояния управления руками
+        # Состояния управления руками и головой
         self.arm_control_state = 'idle'  # 'idle', 'calibrating', 'controlling'
+        self.head_control_enabled = False  # Управление головой включено/выключено
         self.calibration_data = {
             'left_hand_base': None,   # Базовое положение левой руки при калибровке
             'right_hand_base': None,  # Базовое положение правой руки при калибровке
@@ -74,9 +75,9 @@ class TeleopFetcher:
         
         # Коэффициенты чувствительности для разных осей (уменьшены для более плавных движений)
         self.arm_sensitivity = {
-            'x': 4,    # Чувствительность по X (вперед-назад)
-            'y': 4,    # Чувствительность по Y (вверх-вниз)
-            'z': 4     # Чувствительность по Z (поворот)
+            'x': 5,    # Чувствительность по X (вперед-назад)
+            'y': 5,    # Чувствительность по Y (вверх-вниз)
+            'z': -4     # Чувствительность по Z (поворот)
         }
         
         # Стартовые позиции для рук робота (оригинальные значения с правильными ID)
@@ -105,6 +106,7 @@ class TeleopFetcher:
         rospy.loginfo("  - /quest/joints: данные о кнопках и джойстиках VR контроллеров")
         rospy.loginfo("Готов к получению данных от VR гарнитуры Quest")
         rospy.loginfo(f"Начальное состояние управления руками: {self.arm_control_state}")
+        rospy.loginfo(f"Управление головой: {'включено' if self.head_control_enabled else 'отключено'}")
         rospy.loginfo("Для калибровки нажмите X на левом контроллере")
         
         # Устанавливаем начальную позу рук
@@ -185,6 +187,10 @@ class TeleopFetcher:
         Преобразует ориентацию головы оператора в команды управления головой робота.
         """
         if self.operator_head_orientation is None:
+            return
+        
+        # Управление головой включено только при активном управлении руками
+        if not self.head_control_enabled:
             return
         
         # Извлекаем углы Эйлера из кватерниона
@@ -282,7 +288,7 @@ class TeleopFetcher:
             'right_b': right_b
         })
         
-        # Обработка кнопок для управления руками
+        # Обработка кнопок для управления руками и головой
         # Кнопка X (левая) - калибровка/начало управления
         if left_x > 0.5 and not self.button_states['left_x_pressed']:
             rospy.loginfo(f"Кнопка X нажата! Текущее состояние: {self.arm_control_state}")
@@ -371,6 +377,7 @@ class TeleopFetcher:
         rospy.loginfo(f"Текущее состояние: {self.arm_control_state}")
         
         self.arm_control_state = 'calibrating'
+        self.head_control_enabled = False  # Отключаем управление головой во время калибровки
         rospy.loginfo("=== КАЛИБРОВКА РУК ===")
         rospy.loginfo("Выставьте руки в стартовую позу и нажмите X для завершения калибровки")
         rospy.loginfo("Ожидание данных о руках...")
@@ -394,8 +401,9 @@ class TeleopFetcher:
             self.calibration_data['head_base'] = self.operator_head_pose
             
             self.arm_control_state = 'controlling'
+            self.head_control_enabled = True  # Включаем управление головой
             rospy.loginfo("=== КАЛИБРОВКА ЗАВЕРШЕНА ===")
-            rospy.loginfo("Управление руками активировано. Нажмите Y для остановки")
+            rospy.loginfo("Управление руками и головой активировано. Нажмите Y для остановки")
         else:
             rospy.logwarn("Нет данных о руках для калибровки. Попробуйте еще раз.")
             rospy.logwarn("Убедитесь, что VR гарнитура подключена и передает данные")
@@ -403,10 +411,11 @@ class TeleopFetcher:
     
     def stop_arm_control(self):
         """
-        Останавливает управление руками и возвращает их в стартовую позу.
+        Останавливает управление руками и головой, возвращает их в стартовую позу.
         """
         self.arm_control_state = 'idle'
-        rospy.loginfo("=== ОСТАНОВКА УПРАВЛЕНИЯ РУКАМИ ===")
+        self.head_control_enabled = False  # Отключаем управление головой
+        rospy.loginfo("=== ОСТАНОВКА УПРАВЛЕНИЯ РУКАМИ И ГОЛОВОЙ ===")
         rospy.loginfo("Возврат рук в стартовую позу...")
         
         # Возвращаем руки в стартовую позу
