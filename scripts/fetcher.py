@@ -55,6 +55,23 @@ class TeleopFetcher:
             'right_b': 0.0
         }
         
+        # Состояния управления руками
+        self.arm_control_state = 'idle'  # 'idle', 'calibrating', 'controlling'
+        self.calibration_data = {
+            'left_hand_base': None,   # Базовое положение левой руки при калибровке
+            'right_hand_base': None,  # Базовое положение правой руки при калибровке
+            'head_base': None         # Базовое положение головы при калибровке
+        }
+        
+        # Отслеживание нажатий кнопок для предотвращения повторных срабатываний
+        self.button_states = {
+            'left_x_pressed': False,
+            'left_y_pressed': False
+        }
+        
+        # Масштабирование (робот в 5 раз меньше оператора)
+        self.scale_factor = 0.2  # 1/5 = 0.2
+        
         # Стартовые позиции для рук робота
         self.arm_start_positions = {
             # Правая рука
@@ -80,6 +97,8 @@ class TeleopFetcher:
         rospy.loginfo("  - /quest/poses: данные о положении головы и рук оператора")
         rospy.loginfo("  - /quest/joints: данные о кнопках и джойстиках VR контроллеров")
         rospy.loginfo("Готов к получению данных от VR гарнитуры Quest")
+        rospy.loginfo(f"Начальное состояние управления руками: {self.arm_control_state}")
+        rospy.loginfo("Для калибровки нажмите X на левом контроллере")
         
         # Устанавливаем начальную позу рук
         self.set_arms_to_start_position()
@@ -103,10 +122,15 @@ class TeleopFetcher:
         # Обрабатываем управление головой
         self.process_head_control()
         
-        # TODO: Добавить обработку рук в будущем
-        # left_hand_pose = pose_array.poses[1]
-        # right_hand_pose = pose_array.poses[2]
-        # self.process_arms_control(left_hand_pose, right_hand_pose)
+        # Обрабатываем управление руками
+        left_hand_pose = pose_array.poses[1]
+        right_hand_pose = pose_array.poses[2]
+        
+        # Сохраняем последние данные о руках для калибровки
+        self.last_left_hand_pose = left_hand_pose
+        self.last_right_hand_pose = right_hand_pose
+        
+        self.process_arms_control(left_hand_pose, right_hand_pose)
     
     def joints_callback(self, joint_state):
         """
@@ -142,9 +166,7 @@ class TeleopFetcher:
                 f"кнопки A={right_a:.2f}, B={right_b:.2f}"
             )
             
-            # TODO: Добавить обработку команд для управления руками робота
-            # Здесь можно будет использовать данные о кнопках контроллеров
-            # для управления захватом, движением рук и т.д.
+        # Обработка команд для управления руками робота
             self.process_vr_controller_input(
                 left_grip, left_index, left_x, left_y,
                 right_grip, right_index, right_a, right_b
@@ -253,44 +275,48 @@ class TeleopFetcher:
             'right_b': right_b
         })
         
-        # TODO: Реализовать обработку команд от VR контроллеров
-        # Примеры возможного использования:
+        # Обработка кнопок для управления руками
+        # Кнопка X (левая) - калибровка/начало управления
+        if left_x > 0.5 and not self.button_states['left_x_pressed']:
+            rospy.loginfo(f"Кнопка X нажата! Текущее состояние: {self.arm_control_state}")
+            self.button_states['left_x_pressed'] = True
+            if self.arm_control_state == 'idle':
+                rospy.loginfo("Запуск калибровки...")
+                self.start_arm_calibration()
+            elif self.arm_control_state == 'calibrating':
+                rospy.loginfo("Завершение калибровки...")
+                self.finish_arm_calibration()
+        elif left_x <= 0.5:
+            self.button_states['left_x_pressed'] = False
         
-        # 1. Управление захватом рук робота
-        # if left_grip > 0.5:  # Хватка левой руки
-        #     self.control_left_gripper(left_grip)
-        # if right_grip > 0.5:  # Хватка правой руки
-        #     self.control_right_gripper(right_grip)
+        # Кнопка Y (левая) - остановка управления
+        if left_y > 0.5 and not self.button_states['left_y_pressed']:
+            self.button_states['left_y_pressed'] = True
+            if self.arm_control_state == 'controlling':
+                self.stop_arm_control()
+        elif left_y <= 0.5:
+            self.button_states['left_y_pressed'] = False
         
-        # 2. Управление функциональными кнопками
-        # if left_x > 0.5:  # Кнопка X - функция левой руки
-        #     self.execute_left_hand_function_x()
-        # if left_y > 0.5:  # Кнопка Y - функция левой руки
-        #     self.execute_left_hand_function_y()
-        
-        # 3. Функциональные кнопки правого контроллера
-        # if right_a > 0.5:  # Кнопка A - какая-то функция
-        #     self.execute_function_a()
-        # if right_b > 0.5:  # Кнопка B - другая функция
-        #     self.execute_function_b()
-        
-        # 4. Триггеры для точных действий
-        # if left_index > 0.5:  # Левый триггер
-        #     self.execute_precise_action_left()
-        # if right_index > 0.5:  # Правый триггер
-        #     self.execute_precise_action_right()
-        
-        pass
+        # Управление захватом рук
+        if self.arm_control_state == 'controlling':
+            self.control_grippers(left_grip, right_grip)
     
     def process_arms_control(self, left_hand_pose, right_hand_pose):
         """
         Обработка управления руками робота на основе положения рук оператора.
-        Пока не реализовано, но структура готова для будущего расширения.
         """
-        # TODO: Реализовать управление руками
-        # Здесь будет логика преобразования положения рук оператора
-        # в команды управления руками робота
-        pass
+        if self.arm_control_state != 'controlling':
+            return
+        
+        if self.calibration_data['left_hand_base'] is None or self.calibration_data['right_hand_base'] is None:
+            return
+        
+        # Вычисляем относительные смещения от калибровочных позиций
+        left_offset = self.calculate_hand_offset(left_hand_pose, self.calibration_data['left_hand_base'])
+        right_offset = self.calculate_hand_offset(right_hand_pose, self.calibration_data['right_hand_base'])
+        
+        # Применяем масштабирование и преобразуем в команды сервоприводов
+        self.convert_to_servo_commands(left_offset, right_offset)
     
     def set_arms_to_start_position(self):
         """
@@ -323,6 +349,206 @@ class TeleopFetcher:
         # Ждем завершения движения
         rospy.sleep(arm_msg.duration + 0.5)  # Небольшая задержка для завершения
         rospy.loginfo("Стартовая поза рук установлена")
+    
+    def start_arm_calibration(self):
+        """
+        Начинает калибровку рук. Оператор должен выставить руки в стартовую позу.
+        """
+        rospy.loginfo("=== НАЧАЛО КАЛИБРОВКИ РУК ===")
+        rospy.loginfo(f"Текущее состояние: {self.arm_control_state}")
+        
+        self.arm_control_state = 'calibrating'
+        rospy.loginfo("=== КАЛИБРОВКА РУК ===")
+        rospy.loginfo("Выставьте руки в стартовую позу и нажмите X для завершения калибровки")
+        rospy.loginfo("Ожидание данных о руках...")
+    
+    def finish_arm_calibration(self):
+        """
+        Завершает калибровку и начинает управление руками.
+        """
+        rospy.loginfo("=== ЗАВЕРШЕНИЕ КАЛИБРОВКИ ===")
+        rospy.loginfo(f"Текущее состояние: {self.arm_control_state}")
+        
+        # Сохраняем текущие позиции рук как базовые
+        # Данные о руках должны быть получены в последнем pose_callback
+        rospy.loginfo("Сохранение калибровочных данных...")
+        
+        # Проверяем, что у нас есть данные о руках
+        if hasattr(self, 'last_left_hand_pose') and hasattr(self, 'last_right_hand_pose'):
+            rospy.loginfo("Данные о руках найдены, сохраняем калибровку...")
+            self.calibration_data['left_hand_base'] = self.last_left_hand_pose
+            self.calibration_data['right_hand_base'] = self.last_right_hand_pose
+            self.calibration_data['head_base'] = self.operator_head_pose
+            
+            self.arm_control_state = 'controlling'
+            rospy.loginfo("=== КАЛИБРОВКА ЗАВЕРШЕНА ===")
+            rospy.loginfo("Управление руками активировано. Нажмите Y для остановки")
+        else:
+            rospy.logwarn("Нет данных о руках для калибровки. Попробуйте еще раз.")
+            rospy.logwarn("Убедитесь, что VR гарнитура подключена и передает данные")
+            self.arm_control_state = 'idle'
+    
+    def stop_arm_control(self):
+        """
+        Останавливает управление руками и возвращает их в стартовую позу.
+        """
+        self.arm_control_state = 'idle'
+        rospy.loginfo("=== ОСТАНОВКА УПРАВЛЕНИЯ РУКАМИ ===")
+        rospy.loginfo("Возврат рук в стартовую позу...")
+        
+        # Возвращаем руки в стартовую позу
+        self.set_arms_to_start_position()
+        
+        # Очищаем данные калибровки
+        self.calibration_data = {
+            'left_hand_base': None,
+            'right_hand_base': None,
+            'head_base': None
+        }
+        
+        rospy.loginfo("Готово. Нажмите X для новой калибровки")
+    
+    def calculate_hand_offset(self, current_pose, base_pose):
+        """
+        Вычисляет смещение руки относительно калибровочной позиции.
+        
+        Args:
+            current_pose: текущее положение руки
+            base_pose: калибровочное положение руки
+            
+        Returns:
+            dict: смещения по осям x, y, z
+        """
+        if base_pose is None:
+            return {'x': 0, 'y': 0, 'z': 0}
+        
+        offset = {
+            'x': current_pose.position.x - base_pose.position.x,
+            'y': current_pose.position.y - base_pose.position.y,
+            'z': current_pose.position.z - base_pose.position.z
+        }
+        
+        return offset
+    
+    def convert_to_servo_commands(self, left_offset, right_offset):
+        """
+        Преобразует смещения рук в команды сервоприводов.
+        
+        Args:
+            left_offset: смещение левой руки
+            right_offset: смещение правой руки
+        """
+        # Простая обратная кинематика
+        # Применяем масштабирование
+        left_scaled = {
+            'x': left_offset['x'] * self.scale_factor,
+            'y': left_offset['y'] * self.scale_factor,
+            'z': left_offset['z'] * self.scale_factor
+        }
+        
+        right_scaled = {
+            'x': right_offset['x'] * self.scale_factor,
+            'y': right_offset['y'] * self.scale_factor,
+            'z': right_offset['z'] * self.scale_factor
+        }
+        
+        # Преобразуем в углы сервоприводов (упрощенная модель)
+        left_angles = self.calculate_servo_angles(left_scaled, 'left')
+        right_angles = self.calculate_servo_angles(right_scaled, 'right')
+        
+        # Отправляем команды
+        self.send_arm_commands(left_angles, right_angles)
+    
+    def calculate_servo_angles(self, offset, hand_side):
+        """
+        Вычисляет углы сервоприводов на основе смещения руки.
+        
+        Args:
+            offset: смещение руки (x, y, z)
+            hand_side: 'left' или 'right'
+            
+        Returns:
+            dict: углы для сервоприводов
+        """
+        # Упрощенная обратная кинематика
+        # X -> поворот плеча вперед-назад
+        # Y -> подъем плеча вверх-вниз  
+        # Z -> поворот предплечья
+        
+        # Коэффициенты для преобразования смещений в углы
+        scale_x = 100  # градусы на метр
+        scale_y = 100  # градусы на метр
+        scale_z = 50   # градусы на метр
+        
+        angles = {}
+        
+        if hand_side == 'left':
+            # Левая рука (зеркальная)
+            angles['shoulder_forward'] = 874 + int(offset['x'] * scale_x)
+            angles['shoulder_up'] = 833 + int(offset['y'] * scale_y)
+            angles['forearm_rotate'] = 502 + int(offset['z'] * scale_z)
+        else:
+            # Правая рука
+            angles['shoulder_forward'] = 126 + int(offset['x'] * scale_x)
+            angles['shoulder_up'] = 167 + int(offset['y'] * scale_y)
+            angles['forearm_rotate'] = 498 + int(offset['z'] * scale_z)
+        
+        # Ограничиваем углы разумными пределами
+        for key in angles:
+            angles[key] = max(0, min(1000, angles[key]))
+        
+        return angles
+    
+    def send_arm_commands(self, left_angles, right_angles):
+        """
+        Отправляет команды управления руками.
+        
+        Args:
+            left_angles: углы для левой руки
+            right_angles: углы для правой руки
+        """
+        arm_msg = SetBusServosPosition()
+        arm_msg.duration = 0.1  # Быстрое обновление
+        
+        positions = []
+        
+        # Левая рука
+        if left_angles:
+            positions.append(BusServoPosition(id=13, position=left_angles['shoulder_forward']))
+            positions.append(BusServoPosition(id=15, position=left_angles['shoulder_up']))
+            positions.append(BusServoPosition(id=17, position=left_angles['forearm_rotate']))
+        
+        # Правая рука
+        if right_angles:
+            positions.append(BusServoPosition(id=14, position=right_angles['shoulder_forward']))
+            positions.append(BusServoPosition(id=16, position=right_angles['shoulder_up']))
+            positions.append(BusServoPosition(id=18, position=right_angles['forearm_rotate']))
+        
+        arm_msg.position = positions
+        self.arms_pub.publish(arm_msg)
+    
+    def control_grippers(self, left_grip, right_grip):
+        """
+        Управляет захватами рук на основе данных о хватке контроллеров.
+        
+        Args:
+            left_grip: значение хватки левого контроллера (0-1)
+            right_grip: значение хватки правого контроллера (0-1)
+        """
+        # Преобразуем хватку в позиции захватов (0-1000)
+        left_gripper_pos = int(500 + left_grip * 500)  # 500-1000
+        right_gripper_pos = int(500 + right_grip * 500)  # 500-1000
+        
+        arm_msg = SetBusServosPosition()
+        arm_msg.duration = 0.1
+        
+        positions = [
+            BusServoPosition(id=21, position=left_gripper_pos),   # Левый захват
+            BusServoPosition(id=22, position=right_gripper_pos)  # Правый захват
+        ]
+        
+        arm_msg.position = positions
+        self.arms_pub.publish(arm_msg)
     
     def run(self):
         """
