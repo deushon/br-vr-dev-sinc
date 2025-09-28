@@ -103,9 +103,10 @@ class TeleopFetcher:
         y_rotation = euler_angles[1]  # Yaw (поворот вокруг Z)
         x_rotation = euler_angles[0]  # Pitch (наклон вокруг Y)
         
-        # Применяем чувствительность и ограничения
-        target_pan = np.clip(y_rotation * self.head_sensitivity, -self.max_head_pan, self.max_head_pan)
-        target_tilt = np.clip(x_rotation * self.head_sensitivity, -self.max_head_tilt, self.max_head_tilt)
+        # Применяем чувствительность и ограничения с инверсией
+        # Инвертируем управление: оператор поворачивает влево -> робот поворачивается вправо
+        target_pan = np.clip(-y_rotation * self.head_sensitivity, -self.max_head_pan, self.max_head_pan)
+        target_tilt = np.clip(-x_rotation * self.head_sensitivity, -self.max_head_tilt, self.max_head_tilt)
         
         # Отправляем команды управления головой
         self.send_head_command(target_pan, target_tilt)
