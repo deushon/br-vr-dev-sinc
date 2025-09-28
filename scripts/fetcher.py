@@ -72,21 +72,28 @@ class TeleopFetcher:
         # Масштабирование (робот в 5 раз меньше оператора)
         self.scale_factor = 0.2  # 1/5 = 0.2
         
-        # Стартовые позиции для рук робота
+        # Коэффициенты чувствительности для разных осей (уменьшены для более плавных движений)
+        self.arm_sensitivity = {
+            'x': 4,    # Чувствительность по X (вперед-назад)
+            'y': 4,    # Чувствительность по Y (вверх-вниз)
+            'z': 4     # Чувствительность по Z (поворот)
+        }
+        
+        # Стартовые позиции для рук робота (оригинальные значения с правильными ID)
         self.arm_start_positions = {
-            # Правая рука
-            14: 126,   # Правое плечо, вперед-назад
-            16: 167,   # Правое плечо вверх-вниз
-            18: 498,   # Правое предплечье поворот
-            20: 956,   # Правое предплечье сгибание локтя
-            22: 500,   # Правый захват руки (сжимает/разжимает руку)
+            # Правая рука (правильные ID из URDF)
+            14: 126,   # r_sho_pitch - правое плечо вперед-назад
+            16: 167,   # r_sho_roll - правое плечо вверх-вниз
+            18: 498,   # r_el_pitch - правое предплечье сгибание
+            20: 956,   # r_el_yaw - правое предплечье поворот
+            22: 500,   # r_gripper - правый захват
             
-            # Левая рука
-            13: 874,   # Левое плечо вперед-назад
-            15: 833,   # Левое плечо вверх-вниз
-            17: 502,   # Левое предплечье поворот
-            19: 44,    # Левое предплечье сгибание локтя
-            21: 500    # Левый захват руки (сжимает/разжимает руку)
+            # Левая рука (правильные ID из URDF)
+            13: 874,   # l_sho_pitch - левое плечо вперед-назад
+            15: 833,   # l_sho_roll - левое плечо вверх-вниз
+            17: 502,   # l_el_pitch - левое предплечье сгибание
+            19: 44,    # l_el_yaw - левое предплечье поворот
+            21: 500    # l_gripper - левый захват
         }
         
         rospy.loginfo("TeleopFetcher нода инициализирована")
@@ -315,6 +322,12 @@ class TeleopFetcher:
         left_offset = self.calculate_hand_offset(left_hand_pose, self.calibration_data['left_hand_base'])
         right_offset = self.calculate_hand_offset(right_hand_pose, self.calibration_data['right_hand_base'])
         
+        # Логируем смещения для отладки
+        rospy.loginfo_throttle(1, 
+            f"Смещения рук - Левая: x={left_offset['x']:.3f}, y={left_offset['y']:.3f}, z={left_offset['z']:.3f} | "
+            f"Правая: x={right_offset['x']:.3f}, y={right_offset['y']:.3f}, z={right_offset['z']:.3f}"
+        )
+        
         # Применяем масштабирование и преобразуем в команды сервоприводов
         self.convert_to_servo_commands(left_offset, right_offset)
     
@@ -464,38 +477,58 @@ class TeleopFetcher:
         Вычисляет углы сервоприводов на основе смещения руки.
         
         Args:
-            offset: смещение руки (x, y, z)
+            offset: смещение руки (x, y, z) в метрах
             hand_side: 'left' или 'right'
             
         Returns:
-            dict: углы для сервоприводов
+            dict: углы для сервоприводов (0-1000)
         """
-        # Упрощенная обратная кинематика
-        # X -> поворот плеча вперед-назад
-        # Y -> подъем плеча вверх-вниз  
-        # Z -> поворот предплечья
+        # Улучшенная обратная кинематика
+        # X -> поворот плеча вперед-назад (sho_pitch)
+        # Y -> подъем плеча вверх-вниз (sho_roll)
+        # Z -> поворот предплечья (el_yaw)
         
-        # Коэффициенты для преобразования смещений в углы
-        scale_x = 100  # градусы на метр
-        scale_y = 100  # градусы на метр
-        scale_z = 50   # градусы на метр
+        # Коэффициенты для преобразования смещений в углы (радианы на метр)
+        # 1 радиан ≈ 57.3 градуса, 1000 единиц = 2π радиан
+        scale_x = 200 * self.arm_sensitivity['x']  # чувствительность X
+        scale_y = 200 * self.arm_sensitivity['y']  # чувствительность Y  
+        scale_z = 100 * self.arm_sensitivity['z']  # чувствительность Z
+        
+        # Отладочная информация
+        rospy.loginfo_throttle(2, 
+            f"Кинематика {hand_side}: offset={offset}, scale_x={scale_x}, scale_y={scale_y}, scale_z={scale_z}"
+        )
+        
+        # Базовые позиции (стартовые позиции из конфигурации)
+        if hand_side == 'left':
+            base_sho_pitch = 874  # l_sho_pitch стартовая позиция
+            base_sho_roll = 833   # l_sho_roll стартовая позиция
+            base_el_pitch = 502   # l_el_pitch стартовая позиция
+            base_el_yaw = 44      # l_el_yaw стартовая позиция
+        else:
+            base_sho_pitch = 126  # r_sho_pitch стартовая позиция
+            base_sho_roll = 167   # r_sho_roll стартовая позиция
+            base_el_pitch = 498   # r_el_pitch стартовая позиция
+            base_el_yaw = 956     # r_el_yaw стартовая позиция
         
         angles = {}
         
         if hand_side == 'left':
-            # Левая рука (зеркальная)
-            angles['shoulder_forward'] = 874 + int(offset['x'] * scale_x)
-            angles['shoulder_up'] = 833 + int(offset['y'] * scale_y)
-            angles['forearm_rotate'] = 502 + int(offset['z'] * scale_z)
+            # Левая рука
+            angles['sho_pitch'] = base_sho_pitch + int(offset['x'] * scale_x)  # l_sho_pitch
+            angles['sho_roll'] = base_sho_roll + int(offset['y'] * scale_y)     # l_sho_roll
+            angles['el_pitch'] = base_el_pitch  # l_el_pitch (пока не используем)
+            angles['el_yaw'] = base_el_yaw + int(offset['z'] * scale_z)         # l_el_yaw
         else:
-            # Правая рука
-            angles['shoulder_forward'] = 126 + int(offset['x'] * scale_x)
-            angles['shoulder_up'] = 167 + int(offset['y'] * scale_y)
-            angles['forearm_rotate'] = 498 + int(offset['z'] * scale_z)
+            # Правая рука (зеркальная)
+            angles['sho_pitch'] = base_sho_pitch - int(offset['x'] * scale_x)  # r_sho_pitch
+            angles['sho_roll'] = base_sho_roll - int(offset['y'] * scale_y)    # r_sho_roll
+            angles['el_pitch'] = base_el_pitch  # r_el_pitch (пока не используем)
+            angles['el_yaw'] = base_el_yaw - int(offset['z'] * scale_z)        # r_el_yaw
         
-        # Ограничиваем углы разумными пределами
+        # Ограничиваем углы разумными пределами (расширенные пределы)
         for key in angles:
-            angles[key] = max(0, min(1000, angles[key]))
+            angles[key] = max(100, min(900, angles[key]))
         
         return angles
     
@@ -512,20 +545,25 @@ class TeleopFetcher:
         
         positions = []
         
-        # Левая рука
+        # Левая рука (правильные ID из URDF)
         if left_angles:
-            positions.append(BusServoPosition(id=13, position=left_angles['shoulder_forward']))
-            positions.append(BusServoPosition(id=15, position=left_angles['shoulder_up']))
-            positions.append(BusServoPosition(id=17, position=left_angles['forearm_rotate']))
+            positions.append(BusServoPosition(id=13, position=left_angles['sho_pitch']))   # l_sho_pitch
+            positions.append(BusServoPosition(id=15, position=left_angles['sho_roll']))    # l_sho_roll
+            positions.append(BusServoPosition(id=17, position=left_angles['el_pitch']))  # l_el_pitch
+            positions.append(BusServoPosition(id=19, position=left_angles['el_yaw']))     # l_el_yaw
         
-        # Правая рука
+        # Правая рука (правильные ID из URDF)
         if right_angles:
-            positions.append(BusServoPosition(id=14, position=right_angles['shoulder_forward']))
-            positions.append(BusServoPosition(id=16, position=right_angles['shoulder_up']))
-            positions.append(BusServoPosition(id=18, position=right_angles['forearm_rotate']))
+            positions.append(BusServoPosition(id=14, position=right_angles['sho_pitch']))  # r_sho_pitch
+            positions.append(BusServoPosition(id=16, position=right_angles['sho_roll']))  # r_sho_roll
+            positions.append(BusServoPosition(id=18, position=right_angles['el_pitch']))  # r_el_pitch
+            positions.append(BusServoPosition(id=20, position=right_angles['el_yaw']))    # r_el_yaw
         
         arm_msg.position = positions
         self.arms_pub.publish(arm_msg)
+        
+        # Логируем команды для отладки
+        rospy.loginfo_throttle(1, f"Команды рук - Левые: {left_angles}, Правые: {right_angles}")
     
     def control_grippers(self, left_grip, right_grip):
         """
