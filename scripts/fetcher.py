@@ -39,6 +39,10 @@ class TeleopFetcher:
         self.current_head_pan = 0.0
         self.current_head_tilt = 0.0
         
+        # Базовые позиции головы для сброса
+        self.head_base_pan = 0.0
+        self.head_base_tilt = 0.0
+        
         # Данные о положении головы оператора
         self.operator_head_pose = None
         self.operator_head_orientation = None
@@ -58,6 +62,11 @@ class TeleopFetcher:
         # Состояния управления руками и головой
         self.arm_control_state = 'idle'  # 'idle', 'calibrating', 'controlling'
         self.head_control_enabled = False  # Управление головой включено/выключено
+        
+        # Состояния захватов (для запоминания последнего положения)
+        # Центральное положение = 500, пределы ±200
+        self.left_gripper_state = 0.5   # 0.0 = закрыт, 1.0 = открыт (инвертировано)
+        self.right_gripper_state = 0.5   # 0.0 = закрыт, 1.0 = открыт
         self.calibration_data = {
             'left_hand_base': None,   # Базовое положение левой руки при калибровке
             'right_hand_base': None,  # Базовое положение правой руки при калибровке
@@ -75,9 +84,9 @@ class TeleopFetcher:
         
         # Коэффициенты чувствительности для разных осей (уменьшены для более плавных движений)
         self.arm_sensitivity = {
-            'x': 5,    # Чувствительность по X (вперед-назад)
-            'y': 5,    # Чувствительность по Y (вверх-вниз)
-            'z': -4     # Чувствительность по Z (поворот)
+            'x': 9,    # Чувствительность по X (вперед-назад)
+            'y': -11,    # Чувствительность по Y (вверх-вниз)
+            'z': 10     # Чувствительность по Z (поворот)
         }
         
         # Стартовые позиции для рук робота (оригинальные значения с правильными ID)
@@ -211,8 +220,9 @@ class TeleopFetcher:
         
         # Применяем чувствительность и ограничения с инверсией
         # Инвертируем управление: оператор поворачивает влево -> робот поворачивается вправо
-        target_pan = np.clip(-y_rotation * self.head_sensitivity, -self.max_head_pan, self.max_head_pan)
-        target_tilt = np.clip(-x_rotation * self.head_sensitivity, -self.max_head_tilt, self.max_head_tilt)
+        # Добавляем базовые позиции для сброса
+        target_pan = self.head_base_pan + np.clip(-y_rotation * self.head_sensitivity, -self.max_head_pan, self.max_head_pan)
+        target_tilt = self.head_base_tilt + np.clip(-x_rotation * self.head_sensitivity, -self.max_head_tilt, self.max_head_tilt)
         
         # Отправляем команды управления головой
         self.send_head_command(target_pan, target_tilt)
@@ -312,7 +322,7 @@ class TeleopFetcher:
         
         # Управление захватом рук
         if self.arm_control_state == 'controlling':
-            self.control_grippers(left_grip, right_grip)
+            self.control_grippers(left_grip, right_grip, left_index, right_index)
     
     def process_arms_control(self, left_hand_pose, right_hand_pose):
         """
@@ -378,6 +388,10 @@ class TeleopFetcher:
         
         self.arm_control_state = 'calibrating'
         self.head_control_enabled = False  # Отключаем управление головой во время калибровки
+        
+        # Сбрасываем голову в базовое положение
+        self.reset_head_to_base()
+        
         rospy.loginfo("=== КАЛИБРОВКА РУК ===")
         rospy.loginfo("Выставьте руки в стартовую позу и нажмите X для завершения калибровки")
         rospy.loginfo("Ожидание данных о руках...")
@@ -421,6 +435,9 @@ class TeleopFetcher:
         # Возвращаем руки в стартовую позу
         self.set_arms_to_start_position()
         
+        # Сбрасываем захваты в закрытое положение
+        self.reset_grippers()
+        
         # Очищаем данные калибровки
         self.calibration_data = {
             'left_hand_base': None,
@@ -429,6 +446,39 @@ class TeleopFetcher:
         }
         
         rospy.loginfo("Готово. Нажмите X для новой калибровки")
+    
+    def reset_head_to_base(self):
+        """
+        Сбрасывает голову в базовое положение.
+        """
+        rospy.loginfo("Сброс головы в базовое положение...")
+        self.send_head_command(self.head_base_pan, self.head_base_tilt)
+        self.current_head_pan = self.head_base_pan
+        self.current_head_tilt = self.head_base_tilt
+        rospy.loginfo(f"Голова сброшена: pan={self.head_base_pan:.2f}, tilt={self.head_base_tilt:.2f}")
+    
+    def reset_grippers(self):
+        """
+        Сбрасывает захваты в центральное положение (500).
+        """
+        rospy.loginfo("Сброс захватов в центральное положение...")
+        
+        # Сбрасываем состояния захватов в центральное положение
+        self.left_gripper_state = 0.5
+        self.right_gripper_state = 0.5
+        
+        # Отправляем команды в центральное положение (500)
+        arm_msg = SetBusServosPosition()
+        arm_msg.duration = 0.5
+        
+        positions = [
+            BusServoPosition(id=21, position=500),   # Левый захват в центре
+            BusServoPosition(id=22, position=500)     # Правый захват в центре
+        ]
+        
+        arm_msg.position = positions
+        self.arms_pub.publish(arm_msg)
+        rospy.loginfo("Захваты сброшены в центральное положение (500)")
     
     def calculate_hand_offset(self, current_pose, base_pose):
         """
@@ -574,18 +624,48 @@ class TeleopFetcher:
         # Логируем команды для отладки
         rospy.loginfo_throttle(1, f"Команды рук - Левые: {left_angles}, Правые: {right_angles}")
     
-    def control_grippers(self, left_grip, right_grip):
+    def control_grippers(self, left_grip, right_grip, left_index, right_index):
         """
-        Управляет захватами рук на основе данных о хватке контроллеров.
+        Управление захватами рук на основе значений grip и index контроллеров.
         
         Args:
-            left_grip: значение хватки левого контроллера (0-1)
-            right_grip: значение хватки правого контроллера (0-1)
+            left_grip: значение grip левого контроллера (0.0-1.0)
+            right_grip: значение grip правого контроллера (0.0-1.0)
+            left_index: значение index левого контроллера (0.0-1.0)
+            right_index: значение index правого контроллера (0.0-1.0)
         """
-        # Преобразуем хватку в позиции захватов (0-1000)
-        left_gripper_pos = int(500 + left_grip * 500)  # 500-1000
-        right_gripper_pos = int(500 + right_grip * 500)  # 500-1000
+        if self.arm_control_state != 'controlling':
+            return
         
+        # Логика управления захватами:
+        # index = 1.0 -> сжимает захват (уменьшает угол)
+        # grip = 1.0 -> разжимает захват (увеличивает угол)
+        # Если отпустить кнопки, захват остается в последнем положении
+        
+        # Левый захват (инвертирован)
+        if left_index > 0.5:  # Сжимаем
+            self.left_gripper_state = max(0.0, self.left_gripper_state - 0.1)
+        elif left_grip > 0.5:  # Разжимаем
+            self.left_gripper_state = min(1.0, self.left_gripper_state + 0.1)
+        
+        # Правый захват
+        if right_index > 0.5:  # Сжимаем
+            self.right_gripper_state = max(0.0, self.right_gripper_state - 0.1)
+        elif right_grip > 0.5:  # Разжимаем
+            self.right_gripper_state = min(1.0, self.right_gripper_state + 0.1)
+        
+        # Преобразуем состояние в углы сервоприводов
+        # Центральное положение = 500, пределы ±200
+        # Левый захват инвертирован: 0.0 = открыт (700), 1.0 = закрыт (300)
+        # Правый захват: 0.0 = закрыт (300), 1.0 = открыт (700)
+        left_gripper_pos = int(500 + (1.0 - self.left_gripper_state) * 200)  # Инвертировано
+        right_gripper_pos = int(500 + self.right_gripper_state * 200)  # Обычно
+        
+        # Ограничиваем углы пределами ±200 от центрального положения
+        left_gripper_pos = max(300, min(700, left_gripper_pos))
+        right_gripper_pos = max(300, min(700, right_gripper_pos))
+        
+        # Отправляем команды захватам
         arm_msg = SetBusServosPosition()
         arm_msg.duration = 0.1
         
