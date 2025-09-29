@@ -11,8 +11,15 @@ from ros_robot_controller.msg import SetBusServosPosition, BusServoPosition
 class TeleopFetcher:
     """
     ROS нода для телеоперации робота Fetch на основе данных от VR гарнитуры.
-    Управляет головой робота на основе положения головы оператора.
-    Структура готова для добавления контроля рук в будущем.
+    Управляет головой и руками робота на основе положения головы и контроллеров оператора.
+    
+    Новая система управления руками:
+    - Y контроллера -> sho_pitch (плечо вперед-назад)
+    - Z контроллера -> sho_roll (плечо вверх-вниз)
+    - X контроллера -> el_yaw (предплечье поворот)
+    - Наклон X контроллера -> el_pitch (предплечье сгибание)
+    
+    Калибровка выполняется отдельно для каждой руки.
     """
     
     def __init__(self):
@@ -59,6 +66,10 @@ class TeleopFetcher:
             'right_b': 0.0
         }
         
+        # Данные о ориентации контроллеров (для получения наклона)
+        self.left_controller_orientation = None
+        self.right_controller_orientation = None
+        
         # Состояния управления руками и головой
         self.arm_control_state = 'idle'  # 'idle', 'calibrating', 'controlling'
         self.head_control_enabled = False  # Управление головой включено/выключено
@@ -67,10 +78,28 @@ class TeleopFetcher:
         # Центральное положение = 500, пределы ±200
         self.left_gripper_state = 0.5   # 0.0 = закрыт, 1.0 = открыт (инвертировано)
         self.right_gripper_state = 0.5   # 0.0 = закрыт, 1.0 = открыт
+        # Система калибровки для каждой руки отдельно
         self.calibration_data = {
             'left_hand_base': None,   # Базовое положение левой руки при калибровке
             'right_hand_base': None,  # Базовое положение правой руки при калибровке
+            'left_controller_base': None,  # Базовое положение левого контроллера
+            'right_controller_base': None,  # Базовое положение правого контроллера
             'head_base': None         # Базовое положение головы при калибровке
+        }
+        
+        # Калибровочные значения для каждой руки
+        self.left_arm_calibration = {
+            'sho_pitch_base': 874,    # l_sho_pitch базовая позиция
+            'sho_roll_base': 833,     # l_sho_roll базовая позиция  
+            'el_yaw_base': 44,        # l_el_yaw базовая позиция
+            'el_pitch_base': 502      # l_el_pitch базовая позиция
+        }
+        
+        self.right_arm_calibration = {
+            'sho_pitch_base': 126,    # r_sho_pitch базовая позиция
+            'sho_roll_base': 167,     # r_sho_roll базовая позиция
+            'el_yaw_base': 956,       # r_el_yaw базовая позиция
+            'el_pitch_base': 498      # r_el_pitch базовая позиция
         }
         
         # Отслеживание нажатий кнопок для предотвращения повторных срабатываний
@@ -82,11 +111,13 @@ class TeleopFetcher:
         # Масштабирование (робот в 5 раз меньше оператора)
         self.scale_factor = 0.2  # 1/5 = 0.2
         
-        # Коэффициенты чувствительности для разных осей (уменьшены для более плавных движений)
+        # Коэффициенты чувствительности для новой системы управления
+        # Y -> sho_pitch, Z -> sho_roll, X -> el_yaw, наклон X -> el_pitch
         self.arm_sensitivity = {
-            'x': 16,    # Чувствительность по X (вперед-назад)
-            'y': -12,    # Чувствительность по Y (вверх-вниз)
-            'z': 12     # Чувствительность по Z (поворот)
+            'y_to_sho_pitch': 70,      # Y контроллера -> sho_pitch
+            'z_to_sho_roll': 70,       # Z контроллера -> sho_roll  
+            'x_to_el_yaw': 70,         # X контроллера -> el_yaw
+            'tilt_x_to_el_pitch': 35   # Наклон X контроллера -> el_pitch
         }
         
         # Стартовые позиции для рук робота (оригинальные значения с правильными ID)
@@ -94,15 +125,15 @@ class TeleopFetcher:
             # Правая рука (правильные ID из URDF)
             14: 126,   # r_sho_pitch - правое плечо вперед-назад
             16: 167,   # r_sho_roll - правое плечо вверх-вниз
-            18: 498,   # r_el_pitch - правое предплечье сгибание
-            20: 956,   # r_el_yaw - правое предплечье поворот
+            18: 498,   # r_el_pitch - правое предплечье поворот
+            20: 956,   # r_el_yaw - правое предплечье сгибание
             22: 500,   # r_gripper - правый захват
             
             # Левая рука (правильные ID из URDF)
             13: 874,   # l_sho_pitch - левое плечо вперед-назад
             15: 833,   # l_sho_roll - левое плечо вверх-вниз
-            17: 502,   # l_el_pitch - левое предплечье сгибание
-            19: 44,    # l_el_yaw - левое предплечье поворот
+            17: 502,   # l_el_pitch - левое предплечье поворот
+            19: 44,    # l_el_yaw - левое предплечье сгибание
             21: 500    # l_gripper - левый захват
         }
         
@@ -143,6 +174,10 @@ class TeleopFetcher:
         # Обрабатываем управление руками
         left_hand_pose = pose_array.poses[1]
         right_hand_pose = pose_array.poses[2]
+        
+        # Сохраняем ориентацию контроллеров для получения наклона
+        self.left_controller_orientation = left_hand_pose.orientation
+        self.right_controller_orientation = right_hand_pose.orientation
         
         # Сохраняем последние данные о руках для калибровки
         self.last_left_hand_pose = left_hand_pose
@@ -326,7 +361,11 @@ class TeleopFetcher:
     
     def process_arms_control(self, left_hand_pose, right_hand_pose):
         """
-        Обработка управления руками робота на основе положения рук оператора.
+        Обработка управления руками робота на основе новой логики:
+        - Y контроллера -> sho_pitch
+        - Z контроллера -> sho_roll  
+        - X контроллера -> el_yaw
+        - Наклон X контроллера -> el_pitch
         """
         if self.arm_control_state != 'controlling':
             return
@@ -338,14 +377,20 @@ class TeleopFetcher:
         left_offset = self.calculate_hand_offset(left_hand_pose, self.calibration_data['left_hand_base'])
         right_offset = self.calculate_hand_offset(right_hand_pose, self.calibration_data['right_hand_base'])
         
-        # Логируем смещения для отладки
+        # Получаем наклоны контроллеров
+        left_tilt = self.get_controller_tilt(self.left_controller_orientation, self.calibration_data['left_controller_base'])
+        right_tilt = self.get_controller_tilt(self.right_controller_orientation, self.calibration_data['right_controller_base'])
+        
+        # Логируем данные для отладки
         rospy.loginfo_throttle(1, 
-            f"Смещения рук - Левая: x={left_offset['x']:.3f}, y={left_offset['y']:.3f}, z={left_offset['z']:.3f} | "
-            f"Правая: x={right_offset['x']:.3f}, y={right_offset['y']:.3f}, z={right_offset['z']:.3f}"
+            f"Новое управление - Левая: Y={left_offset['y']:.3f}->sho_pitch, Z={left_offset['z']:.3f}->sho_roll, "
+            f"X={left_offset['x']:.3f}->el_yaw, наклон={left_tilt:.3f}->el_pitch | "
+            f"Правая: Y={right_offset['y']:.3f}->sho_pitch, Z={right_offset['z']:.3f}->sho_roll, "
+            f"X={right_offset['x']:.3f}->el_yaw, наклон={right_tilt:.3f}->el_pitch"
         )
         
-        # Применяем масштабирование и преобразуем в команды сервоприводов
-        self.convert_to_servo_commands(left_offset, right_offset)
+        # Преобразуем в команды сервоприводов по новой логике
+        self.convert_to_new_servo_commands(left_offset, right_offset, left_tilt, right_tilt)
     
     def set_arms_to_start_position(self):
         """
@@ -407,19 +452,27 @@ class TeleopFetcher:
         # Данные о руках должны быть получены в последнем pose_callback
         rospy.loginfo("Сохранение калибровочных данных...")
         
-        # Проверяем, что у нас есть данные о руках
-        if hasattr(self, 'last_left_hand_pose') and hasattr(self, 'last_right_hand_pose'):
-            rospy.loginfo("Данные о руках найдены, сохраняем калибровку...")
+        # Проверяем, что у нас есть данные о руках и контроллерах
+        if (hasattr(self, 'last_left_hand_pose') and hasattr(self, 'last_right_hand_pose') and
+            self.left_controller_orientation is not None and self.right_controller_orientation is not None):
+            rospy.loginfo("Данные о руках и контроллерах найдены, сохраняем калибровку...")
             self.calibration_data['left_hand_base'] = self.last_left_hand_pose
             self.calibration_data['right_hand_base'] = self.last_right_hand_pose
+            self.calibration_data['left_controller_base'] = self.left_controller_orientation
+            self.calibration_data['right_controller_base'] = self.right_controller_orientation
             self.calibration_data['head_base'] = self.operator_head_pose
             
             self.arm_control_state = 'controlling'
             self.head_control_enabled = True  # Включаем управление головой
             rospy.loginfo("=== КАЛИБРОВКА ЗАВЕРШЕНА ===")
-            rospy.loginfo("Управление руками и головой активировано. Нажмите Y для остановки")
+            rospy.loginfo("Новая система управления руками активирована:")
+            rospy.loginfo("  - Y контроллера -> sho_pitch")
+            rospy.loginfo("  - Z контроллера -> sho_roll")
+            rospy.loginfo("  - X контроллера -> el_yaw")
+            rospy.loginfo("  - Наклон X контроллера -> el_pitch")
+            rospy.loginfo("Нажмите Y для остановки")
         else:
-            rospy.logwarn("Нет данных о руках для калибровки. Попробуйте еще раз.")
+            rospy.logwarn("Нет данных о руках или контроллерах для калибровки. Попробуйте еще раз.")
             rospy.logwarn("Убедитесь, что VR гарнитура подключена и передает данные")
             self.arm_control_state = 'idle'
     
@@ -442,6 +495,8 @@ class TeleopFetcher:
         self.calibration_data = {
             'left_hand_base': None,
             'right_hand_base': None,
+            'left_controller_base': None,
+            'right_controller_base': None,
             'head_base': None
         }
         
@@ -501,6 +556,94 @@ class TeleopFetcher:
         }
         
         return offset
+    
+    def get_controller_tilt(self, current_orientation, base_orientation):
+        """
+        Вычисляет наклон контроллера по оси X относительно калибровочного положения.
+        
+        Args:
+            current_orientation: текущая ориентация контроллера
+            base_orientation: калибровочная ориентация контроллера
+            
+        Returns:
+            float: наклон по оси X в радианах
+        """
+        if base_orientation is None or current_orientation is None:
+            return 0.0
+        
+        # Преобразуем кватернионы в углы Эйлера
+        current_euler = self.quaternion_to_euler(
+            current_orientation.x, current_orientation.y, 
+            current_orientation.z, current_orientation.w
+        )
+        base_euler = self.quaternion_to_euler(
+            base_orientation.x, base_orientation.y,
+            base_orientation.z, base_orientation.w
+        )
+        
+        # Вычисляем разность наклона по оси X (pitch)
+        tilt_difference = current_euler[0] - base_euler[0]  # pitch (наклон вперед-назад)
+        
+        return tilt_difference
+    
+    def convert_to_new_servo_commands(self, left_offset, right_offset, left_tilt, right_tilt):
+        """
+        Преобразует смещения и наклоны в команды сервоприводов по новой логике.
+        
+        Args:
+            left_offset: смещение левой руки (x, y, z)
+            right_offset: смещение правой руки (x, y, z)
+            left_tilt: наклон левого контроллера
+            right_tilt: наклон правого контроллера
+        """
+        # Левая рука: Y->sho_pitch, Z->sho_roll, X->el_yaw, наклон->el_pitch
+        left_angles = {
+            'sho_pitch': self.left_arm_calibration['sho_pitch_base'] + int(left_offset['y'] * self.arm_sensitivity['y_to_sho_pitch']),
+            'sho_roll': self.left_arm_calibration['sho_roll_base'] + int(left_offset['z'] * self.arm_sensitivity['z_to_sho_roll']),
+            'el_yaw': self.left_arm_calibration['el_yaw_base'] + int(left_offset['x'] * self.arm_sensitivity['x_to_el_yaw']),
+            'el_pitch': self.left_arm_calibration['el_pitch_base'] + int(left_tilt * self.arm_sensitivity['tilt_x_to_el_pitch'])
+        }
+        
+        # Правая рука: Y->sho_pitch, Z->sho_roll, X->el_yaw, наклон->el_pitch (зеркально)
+        right_angles = {
+            'sho_pitch': self.right_arm_calibration['sho_pitch_base'] - int(right_offset['y'] * self.arm_sensitivity['y_to_sho_pitch']),
+            'sho_roll': self.right_arm_calibration['sho_roll_base'] - int(right_offset['z'] * self.arm_sensitivity['z_to_sho_roll']),
+            'el_yaw': self.right_arm_calibration['el_yaw_base'] - int(right_offset['x'] * self.arm_sensitivity['x_to_el_yaw']),
+            'el_pitch': self.right_arm_calibration['el_pitch_base'] - int(right_tilt * self.arm_sensitivity['tilt_x_to_el_pitch'])
+        }
+        
+        # Ограничиваем углы пределами
+        left_angles = self.limit_servo_angles(left_angles, 'left')
+        right_angles = self.limit_servo_angles(right_angles, 'right')
+        
+        # Отправляем команды
+        self.send_arm_commands(left_angles, right_angles)
+    
+    def limit_servo_angles(self, angles, hand_side):
+        """
+        Ограничивает углы сервоприводов специфичными пределами для каждой руки.
+        
+        Args:
+            angles: словарь углов
+            hand_side: 'left' или 'right'
+            
+        Returns:
+            dict: ограниченные углы
+        """
+        limited_angles = {}
+        
+        for key, angle in angles.items():
+            if key == 'sho_roll' and hand_side == 'left':
+                # ID15 (l_sho_roll): максимум 800
+                limited_angles[key] = int(max(100, min(800, angle)))
+            elif key == 'sho_roll' and hand_side == 'right':
+                # ID16 (r_sho_roll): минимум 200
+                limited_angles[key] = int(max(200, min(900, angle)))
+            else:
+                # Остальные сервоприводы - стандартные ограничения
+                limited_angles[key] = int(max(100, min(900, angle)))
+        
+        return limited_angles
     
     def convert_to_servo_commands(self, left_offset, right_offset):
         """
