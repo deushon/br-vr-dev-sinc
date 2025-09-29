@@ -84,9 +84,9 @@ class TeleopFetcher:
         
         # Коэффициенты чувствительности для разных осей (уменьшены для более плавных движений)
         self.arm_sensitivity = {
-            'x': 9,    # Чувствительность по X (вперед-назад)
-            'y': -11,    # Чувствительность по Y (вверх-вниз)
-            'z': 10     # Чувствительность по Z (поворот)
+            'x': 16,    # Чувствительность по X (вперед-назад)
+            'y': -12,    # Чувствительность по Y (вверх-вниз)
+            'z': 12     # Чувствительность по Z (поворот)
         }
         
         # Стартовые позиции для рук робота (оригинальные значения с правильными ID)
@@ -472,7 +472,7 @@ class TeleopFetcher:
         arm_msg.duration = 0.5
         
         positions = [
-            BusServoPosition(id=21, position=500),   # Левый захват в центре
+            # BusServoPosition(id=21, position=500),   # Левый захват (ОТКЛЮЧЕН)
             BusServoPosition(id=22, position=500)     # Правый захват в центре
         ]
         
@@ -585,9 +585,22 @@ class TeleopFetcher:
             angles['el_pitch'] = base_el_pitch  # r_el_pitch (пока не используем)
             angles['el_yaw'] = base_el_yaw - int(offset['z'] * scale_z)        # r_el_yaw
         
-        # Ограничиваем углы разумными пределами (расширенные пределы)
+        # Ограничиваем углы специфичными пределами для каждого сервопривода
+        # ID15 (l_sho_roll): максимум 800
+        if 'sho_roll' in angles and hand_side == 'left':
+            angles['sho_roll'] = int(max(100, min(800, angles['sho_roll'])))
+        # ID16 (r_sho_roll): минимум 200
+        elif 'sho_roll' in angles and hand_side == 'right':
+            angles['sho_roll'] = int(max(200, min(900, angles['sho_roll'])))
+        # Остальные сервоприводы - стандартные ограничения
+        else:
+            for key in angles:
+                if key != 'sho_roll':  # sho_roll уже обработан выше
+                    angles[key] = int(max(100, min(900, angles[key])))
+        
+        # Дополнительная проверка: убеждаемся, что все значения положительные целые числа
         for key in angles:
-            angles[key] = max(100, min(900, angles[key]))
+            angles[key] = int(max(0, angles[key]))
         
         return angles
     
@@ -606,17 +619,17 @@ class TeleopFetcher:
         
         # Левая рука (правильные ID из URDF)
         if left_angles:
-            positions.append(BusServoPosition(id=13, position=left_angles['sho_pitch']))   # l_sho_pitch
-            positions.append(BusServoPosition(id=15, position=left_angles['sho_roll']))    # l_sho_roll
-            positions.append(BusServoPosition(id=17, position=left_angles['el_pitch']))  # l_el_pitch
-            positions.append(BusServoPosition(id=19, position=left_angles['el_yaw']))     # l_el_yaw
+            positions.append(BusServoPosition(id=13, position=int(max(0, left_angles['sho_pitch']))))   # l_sho_pitch
+            positions.append(BusServoPosition(id=15, position=int(max(0, left_angles['sho_roll']))))    # l_sho_roll
+            positions.append(BusServoPosition(id=17, position=int(max(0, left_angles['el_pitch']))))  # l_el_pitch
+            positions.append(BusServoPosition(id=19, position=int(max(0, left_angles['el_yaw']))))     # l_el_yaw
         
         # Правая рука (правильные ID из URDF)
         if right_angles:
-            positions.append(BusServoPosition(id=14, position=right_angles['sho_pitch']))  # r_sho_pitch
-            positions.append(BusServoPosition(id=16, position=right_angles['sho_roll']))  # r_sho_roll
-            positions.append(BusServoPosition(id=18, position=right_angles['el_pitch']))  # r_el_pitch
-            positions.append(BusServoPosition(id=20, position=right_angles['el_yaw']))    # r_el_yaw
+            positions.append(BusServoPosition(id=14, position=int(max(0, right_angles['sho_pitch']))))  # r_sho_pitch
+            positions.append(BusServoPosition(id=16, position=int(max(0, right_angles['sho_roll']))))  # r_sho_roll
+            positions.append(BusServoPosition(id=18, position=int(max(0, right_angles['el_pitch']))))  # r_el_pitch
+            positions.append(BusServoPosition(id=20, position=int(max(0, right_angles['el_yaw']))))    # r_el_yaw
         
         arm_msg.position = positions
         self.arms_pub.publish(arm_msg)
@@ -642,11 +655,11 @@ class TeleopFetcher:
         # grip = 1.0 -> разжимает захват (увеличивает угол)
         # Если отпустить кнопки, захват остается в последнем положении
         
-        # Левый захват (инвертирован)
-        if left_index > 0.5:  # Сжимаем
-            self.left_gripper_state = max(0.0, self.left_gripper_state - 0.1)
-        elif left_grip > 0.5:  # Разжимаем
-            self.left_gripper_state = min(1.0, self.left_gripper_state + 0.1)
+        # Левый захват (ВРЕМЕННО ОТКЛЮЧЕН - сервопривод сломан)
+        # if left_index > 0.5:  # Сжимаем
+        #     self.left_gripper_state = max(0.0, self.left_gripper_state - 0.1)
+        # elif left_grip > 0.5:  # Разжимаем
+        #     self.left_gripper_state = min(1.0, self.left_gripper_state + 0.1)
         
         # Правый захват
         if right_index > 0.5:  # Сжимаем
@@ -665,12 +678,12 @@ class TeleopFetcher:
         left_gripper_pos = max(300, min(700, left_gripper_pos))
         right_gripper_pos = max(300, min(700, right_gripper_pos))
         
-        # Отправляем команды захватам
+        # Отправляем команды захватам (левый захват ВРЕМЕННО ОТКЛЮЧЕН)
         arm_msg = SetBusServosPosition()
         arm_msg.duration = 0.1
         
         positions = [
-            BusServoPosition(id=21, position=left_gripper_pos),   # Левый захват
+            # BusServoPosition(id=21, position=left_gripper_pos),   # Левый захват (ОТКЛЮЧЕН)
             BusServoPosition(id=22, position=right_gripper_pos)  # Правый захват
         ]
         
