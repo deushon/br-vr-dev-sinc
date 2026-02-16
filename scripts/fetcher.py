@@ -114,9 +114,9 @@ class TeleopFetcher:
         # Коэффициенты чувствительности для новой системы управления
         # Y -> sho_pitch, Z -> sho_roll, X -> el_yaw, наклон X -> el_pitch
         self.arm_sensitivity = {
-            'y_to_sho_pitch': 70,      # Y контроллера -> sho_pitch
-            'z_to_sho_roll': 70,       # Z контроллера -> sho_roll  
-            'x_to_el_yaw': 70,         # X контроллера -> el_yaw
+            'y_to_sho_pitch': 90,      # Y контроллера -> sho_pitch
+            'z_to_sho_roll': 90,       # Z контроллера -> sho_roll  
+            'x_to_el_yaw': 90,         # X контроллера -> el_yaw
             'tilt_x_to_el_pitch': 35   # Наклон X контроллера -> el_pitch
         }
         
@@ -183,7 +183,8 @@ class TeleopFetcher:
         self.last_left_hand_pose = left_hand_pose
         self.last_right_hand_pose = right_hand_pose
         
-        self.process_arms_control(left_hand_pose, right_hand_pose)
+        # ВРЕМЕННО ОТКЛЮЧЕНО: управление руками
+        # self.process_arms_control(left_hand_pose, right_hand_pose)
     
     def joints_callback(self, joint_state):
         """
@@ -234,8 +235,8 @@ class TeleopFetcher:
             return
         
         # Управление головой включено только при активном управлении руками
-        if not self.head_control_enabled:
-            return
+        #if not self.head_control_enabled:
+        #    return
         
         # Извлекаем углы Эйлера из кватерниона
         # Y отвечает за повороты головы влево-вправо (-1 до 1)
@@ -355,9 +356,9 @@ class TeleopFetcher:
         elif left_y <= 0.5:
             self.button_states['left_y_pressed'] = False
         
-        # Управление захватом рук
-        if self.arm_control_state == 'controlling':
-            self.control_grippers(left_grip, right_grip, left_index, right_index)
+        # ВРЕМЕННО ОТКЛЮЧЕНО: управление захватом рук
+        # if self.arm_control_state == 'controlling':
+        #     self.control_grippers(left_grip, right_grip, left_index, right_index)
     
     def process_arms_control(self, left_hand_pose, right_hand_pose):
         """
@@ -527,7 +528,7 @@ class TeleopFetcher:
         arm_msg.duration = 0.5
         
         positions = [
-            # BusServoPosition(id=21, position=500),   # Левый захват (ОТКЛЮЧЕН)
+            BusServoPosition(id=21, position=500),   # Левый захват в центре
             BusServoPosition(id=22, position=500)     # Правый захват в центре
         ]
         
@@ -798,11 +799,11 @@ class TeleopFetcher:
         # grip = 1.0 -> разжимает захват (увеличивает угол)
         # Если отпустить кнопки, захват остается в последнем положении
         
-        # Левый захват (ВРЕМЕННО ОТКЛЮЧЕН - сервопривод сломан)
-        # if left_index > 0.5:  # Сжимаем
-        #     self.left_gripper_state = max(0.0, self.left_gripper_state - 0.1)
-        # elif left_grip > 0.5:  # Разжимаем
-        #     self.left_gripper_state = min(1.0, self.left_gripper_state + 0.1)
+        # Левый захват
+        if left_index > 0.5:  # Сжимаем
+            self.left_gripper_state = max(0.0, self.left_gripper_state - 0.1)
+        elif left_grip > 0.5:  # Разжимаем
+            self.left_gripper_state = min(1.0, self.left_gripper_state + 0.1)
         
         # Правый захват
         if right_index > 0.5:  # Сжимаем
@@ -821,12 +822,12 @@ class TeleopFetcher:
         left_gripper_pos = max(300, min(700, left_gripper_pos))
         right_gripper_pos = max(300, min(700, right_gripper_pos))
         
-        # Отправляем команды захватам (левый захват ВРЕМЕННО ОТКЛЮЧЕН)
+        # Отправляем команды захватам
         arm_msg = SetBusServosPosition()
         arm_msg.duration = 0.1
         
         positions = [
-            # BusServoPosition(id=21, position=left_gripper_pos),   # Левый захват (ОТКЛЮЧЕН)
+            BusServoPosition(id=21, position=left_gripper_pos),   # Левый захват
             BusServoPosition(id=22, position=right_gripper_pos)  # Правый захват
         ]
         
