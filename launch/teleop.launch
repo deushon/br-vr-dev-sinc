@@ -38,7 +38,12 @@
     <arg name="rviz_config" value="$(find robot)/launch/moveit.rviz"/>
   </include>
 
-  <!-- Pose source: VR + manual merge -> /teleop_fetch/poses -->
+  <!-- VR remapper: только контроллеры Quest -> body_link (axis + post_mapping) -->
+  <node name="vr_remapper" pkg="teleop_fetch" type="vr_remapper_node.py" output="screen">
+    <param name="axis_mapping" value="xy"/>
+  </node>
+
+  <!-- Pose source: VR (remapped) + manual merge -> /teleop_fetch/poses -->
   <node name="pose_source" pkg="teleop_fetch" type="pose_source_node.py" output="screen"/>
 
   <!-- Fast IK node: subscribes to /teleop_fetch/poses, publishes arm_servo_targets -->
