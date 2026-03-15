@@ -33,6 +33,7 @@
 | `fast_ik_node.cpp` | IK обеих рук, грипперы, conversion joint→servo | ✅ |
 | `config/fast_ik.yaml` | axis_mapping, robot_scale, left_hand, gripper | ✅ |
 | Публикует | `/teleop_fetch/arm_servo_targets` | ✅ |
+| Публикует | `/teleop_fetch/teleop_state` (TeleopState) | ✅ |
 | Debug | `/teleop_fetch/debug_target_poses` (PoseArray) | ✅ |
 
 **Особенности:**
@@ -108,7 +109,24 @@ teleop_fetch (single publisher) → /ros_robot_controller/bus_servo/set_position
 
 - **RViz:** `roslaunch teleop_fetch teleop_debug.launch`
 - **Web viz:** rosbridge + `teleop_debug.html` (Display axes: body_link→Three.js)
-- **Топики:** `/teleop_fetch/debug_target_poses`, `/visualization_marker`
+- **Топики:** `/teleop_fetch/debug_target_poses`, `/teleop_fetch/teleop_state`, `/visualization_marker`
+
+---
+
+## Топик /teleop_fetch/teleop_state
+
+**Тип:** `ainex_interfaces/TeleopState`
+
+Публикуется fast_ik_node при каждом обновлении poses. Содержит состояние IK и ошибки.
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| header | std_msgs/Header | stamp, frame_id |
+| left_arm_ok | bool | IK успешен для левой руки |
+| right_arm_ok | bool | IK успешен для правой руки |
+| left_arm_out_of_bounds | bool | Цель вне досягаемости; рука следует в ближайшей точке (clamp_to_workspace) |
+| right_arm_out_of_bounds | bool | Аналогично для правой руки |
+| errors | string[] | Текстовые сообщения: "Left arm IK failed", "Right arm IK failed" при неудаче |
 
 ---
 
