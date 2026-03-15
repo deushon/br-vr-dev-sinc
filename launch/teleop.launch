@@ -38,9 +38,9 @@
     <arg name="rviz_config" value="$(find robot)/launch/moveit.rviz"/>
   </include>
 
-  <!-- VR remapper: только контроллеры Quest -> body_link (axis + post_mapping) -->
+  <!-- VR remapper: маппинг + R_A калибровка + scale -->
   <node name="vr_remapper" pkg="teleop_fetch" type="vr_remapper_node.py" output="screen">
-    <param name="axis_mapping" value="xy"/>
+    <rosparam command="load" file="$(find teleop_fetch)/config/vr_remapper.yaml"/>
   </node>
 
   <!-- Pose source: VR (remapped) + manual merge -> /teleop_fetch/poses -->

@@ -63,20 +63,10 @@
         <div class="coords" id="xy-status">Нажмите X для включения</div>
       </div>
       <div class="panel" style="border: 2px solid #238636;">
-        <h3>Калибровка (T-поза)</h3>
-        <label><strong>SCALE</strong> (robot_arm / human_arm)</label>
-        <div class="mode-row">
-          <input type="number" id="human-arm" value="0.8" step="0.1" placeholder="human">
-          <input type="number" id="robot-arm" value="0.2" step="0.01" placeholder="robot">
-        </div>
-        <div class="coords" style="font-size:0.7rem; color:#8b949e; margin-bottom:4px;">Offset = VR-позиции в T-позе (вычитаются). Калибровка: встать в T, нажать R_A или ввести вручную.</div>
-        <label><strong>OFFSET</strong> (вычесть из VR, T-поза)</label>
-        <div class="coords">Left: <input type="number" id="offset-lx" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-ly" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-lz" value="0" step="0.01" style="width:50px"></div>
-        <div class="coords">Right: <input type="number" id="offset-rx" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-ry" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-rz" value="0" step="0.01" style="width:50px"></div>
-        <div class="mode-row">
-          <button id="btn-apply-offset" class="secondary">Применить offset</button>
-          <button id="btn-reset-offset" class="secondary">Сбросить в 0</button>
-        </div>
+        <h3>Калибровка + Scale</h3>
+        <div class="coords" style="font-size:0.7rem; color:#8b949e; margin-bottom:6px;">Приведите руки в естественное положение (перед собой, слегка внизу), нажмите R_A на правом джойстике.</div>
+        <label><strong>SCALE</strong> (чувствительность 0.0001..100, обновляется на лету)</label>
+        <input type="number" id="scale" value="0.25" min="0.0001" max="100" step="0.01">
       </div>
       <div class="panel">
         <h3>Ремаппинг контроллеров (только VR)</h3>
@@ -172,10 +162,7 @@
     let manualPosePub = null;
     let poseModePub = null;
     let jointsPub = null;
-    let axisMappingPub = null;
-    let scaleParamsPub = null;
-    let calibrationOffsetPub = null;
-    let postMappingPub = null;
+    let scalePub = null;
     let xyXPressed = false;
     let xyYPressed = false;
     let manualPublishInterval = null;
@@ -476,20 +463,9 @@
     }
 
     function scalePose(x, y, z, isLeft) {
-      const scale = parseFloat(document.getElementById('robot-arm').value) / parseFloat(document.getElementById('human-arm').value);
-      const neck = parseFloat(document.getElementById('neck-offset').value);
-      const hx = parseFloat(document.getElementById('head-x').value);
-      const robotZ = parseFloat(document.getElementById('robot-z').value);
-      const handOff = isLeft ? 0.05 : -0.05;
-      const swapYz = document.getElementById('post-swap-yz')?.checked ?? false;
-      const invY = document.getElementById('post-inv-y')?.checked ?? false;
-      const invZ = document.getElementById('post-inv-z')?.checked ?? false;
-      // axis xy по умолчанию: (-y, z, -x). post-swap=ON даёт старый (-y, -x, z)
-      let bx = -y, by = swapYz ? -x : z, bz = swapYz ? z : -x;
-      if (invY) by = -by;
-      if (invZ) bz = -bz;
-      const ox = bx + hx, oy = by + handOff, oz = bz - neck;
-      const body = { x: ox * scale, y: oy * scale, z: oz * scale + robotZ };
+      const scale = parseFloat(document.getElementById('scale')?.value || 0.25);
+      const [bx, by, bz] = [z, -x, y];  // map как в vr_remapper
+      const body = { x: bx * scale, y: by * scale, z: bz * scale };
       return bodyLinkToThree(body.x, body.y, body.z);
     }
 
@@ -522,71 +498,26 @@
       jointsPub.publish(msg);
     }
 
-    function publishAxisMapping() {
-      if (!axisMappingPub || !ros || !ros.isConnected) return;
-      const v = document.getElementById('axis-mapping-robot')?.value || 'xy';
-      axisMappingPub.publish({ data: v });
-    }
-
-    function publishPostMapping() {
-      if (!postMappingPub || !ros || !ros.isConnected) return;
-      const swap = document.getElementById('post-swap-yz')?.checked ? 1 : 0;
-      const invY = document.getElementById('post-inv-y')?.checked ? 1 : 0;
-      const invZ = document.getElementById('post-inv-z')?.checked ? 1 : 0;
-      const swapRightOnly = document.getElementById('post-swap-right-only')?.checked ? 1 : 0;
-      postMappingPub.publish({ data: [swap, invY, invZ, swapRightOnly] });
-    }
-
     function publishPoseMode() {
       if (!poseModePub || !ros || !ros.isConnected) return;
       poseModePub.publish({ data: manualMode ? 'manual' : 'vr' });
     }
 
-    function publishCalibrationOffset() {
-      if (!calibrationOffsetPub || !ros || !ros.isConnected) return;
-      const lx = parseFloat(document.getElementById('offset-lx')?.value || 0);
-      const ly = parseFloat(document.getElementById('offset-ly')?.value || 0);
-      const lz = parseFloat(document.getElementById('offset-lz')?.value || 0);
-      const rx = parseFloat(document.getElementById('offset-rx')?.value || 0);
-      const ry = parseFloat(document.getElementById('offset-ry')?.value || 0);
-      const rz = parseFloat(document.getElementById('offset-rz')?.value || 0);
-      calibrationOffsetPub.publish({ data: [lx, ly, lz, rx, ry, rz] });
-    }
-
-    function publishScaleParams() {
-      if (!scaleParamsPub || !ros || !ros.isConnected) return;
-      const human = parseFloat(document.getElementById('human-arm')?.value || 0.8);
-      const robot = parseFloat(document.getElementById('robot-arm')?.value || 0.2);
-      const neck = parseFloat(document.getElementById('neck-offset')?.value || 0.25);
-      const headX = parseFloat(document.getElementById('head-x')?.value || 0.15);
-      const robotZ = parseFloat(document.getElementById('robot-z')?.value || 0.087448);
-      scaleParamsPub.publish({ data: [human, robot, neck, headX, robotZ] });
+    function publishScale() {
+      if (!scalePub || !ros || !ros.isConnected) return;
+      const v = parseFloat(document.getElementById('scale')?.value || 0.25);
+      scalePub.publish({ data: Math.max(0.0001, Math.min(100, v)) });
     }
 
     function exportSettings() {
-      const axisMap = document.getElementById('axis-mapping-robot')?.value || 'xy';
-      const swapYz = document.getElementById('post-swap-yz')?.checked ?? true;
-      const invY = document.getElementById('post-inv-y')?.checked ?? false;
-      const invZ = document.getElementById('post-inv-z')?.checked ?? false;
-      const human = document.getElementById('human-arm')?.value || '0.8';
-      const robot = document.getElementById('robot-arm')?.value || '0.2';
-      const neck = document.getElementById('neck-offset')?.value || '0.25';
-      const headX = document.getElementById('head-x')?.value || '0.15';
-      const robotZ = document.getElementById('robot-z')?.value || '0.087448';
-      const yaml = `# fast_ik.yaml (axis_mapping + post_mapping + robot_scale)
-axis_mapping: "${axisMap}"
+      const scale = document.getElementById('scale')?.value || '0.25';
+      const yaml = `# vr_remapper.yaml
+scale: ${scale}
 
-post_mapping:
-  swap_yz: ${swapYz}
-  inv_y: ${invY}
-  inv_z: ${invZ}
-
-robot_scale:
-  human_arm_length: ${human}
-  robot_arm_length: ${robot}
-  neck_offset: ${neck}
-  big_head_x_offset: ${headX}
-  robot_z_offset: ${robotZ}
+# reference_pose из логов робота (руки перед собой, слегка внизу)
+reference_pose:
+  left: [0.143281, 0.103784, 0.020140]
+  right: [0.124819, -0.087679, 0.016086]
 `;
       const ta = document.getElementById('export-output');
       ta.value = yaml;
@@ -598,15 +529,9 @@ robot_scale:
       manualPosePub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/manual_poses', messageType: 'geometry_msgs/PoseArray' });
       poseModePub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/pose_mode', messageType: 'std_msgs/String' });
       jointsPub = new ROSLIB.Topic({ ros, name: '/quest/joints', messageType: 'sensor_msgs/JointState' });
-      axisMappingPub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/axis_mapping', messageType: 'std_msgs/String' });
-      scaleParamsPub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/scale_params', messageType: 'std_msgs/Float64MultiArray' });
-      calibrationOffsetPub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/calibration_offset', messageType: 'std_msgs/Float64MultiArray' });
-      postMappingPub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/post_mapping', messageType: 'std_msgs/Float64MultiArray' });
-      publishAxisMapping();
-      publishScaleParams();
+      scalePub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/scale', messageType: 'std_msgs/Float64' });
+      publishScale();
       publishPoseMode();
-      publishCalibrationOffset();
-      publishPostMapping();
       if (manualMode && manualPublishInterval) clearInterval(manualPublishInterval);
       if (manualMode) manualPublishInterval = setInterval(publishManualPoses, 50);
 
@@ -688,25 +613,12 @@ robot_scale:
     document.getElementById('mode-vr').addEventListener('click', () => setMode('vr'));
     document.getElementById('mode-manual').addEventListener('click', () => setMode('manual'));
     document.getElementById('axis-map').addEventListener('change', () => applyAxisMapToTargets());
-    document.getElementById('axis-mapping-robot').addEventListener('change', () => { publishAxisMapping(); applyAxisMapToTargets(); });
-    ['post-swap-yz','post-inv-y','post-inv-z','post-swap-right-only'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('change', publishPostMapping);
-    });
-    ['human-arm','robot-arm','neck-offset','head-x','robot-z'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('change', publishScaleParams);
-      if (el) el.addEventListener('input', publishScaleParams);
-    });
     document.getElementById('btn-export').addEventListener('click', exportSettings);
-    document.getElementById('btn-apply-offset').addEventListener('click', publishCalibrationOffset);
-    document.getElementById('btn-reset-offset').addEventListener('click', () => {
-      ['offset-lx','offset-ly','offset-lz','offset-rx','offset-ry','offset-rz'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '0';
-      });
-      publishCalibrationOffset();
-    });
+    const scaleEl = document.getElementById('scale');
+    if (scaleEl) {
+      scaleEl.addEventListener('change', publishScale);
+      scaleEl.addEventListener('input', publishScale);
+    }
     init3D();
   </script>
 </body>
