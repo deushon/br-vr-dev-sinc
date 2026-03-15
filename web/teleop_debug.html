@@ -69,22 +69,34 @@
           <input type="number" id="human-arm" value="0.8" step="0.1" placeholder="human">
           <input type="number" id="robot-arm" value="0.2" step="0.01" placeholder="robot">
         </div>
+        <div class="coords" style="font-size:0.7rem; color:#8b949e; margin-bottom:4px;">Offset = VR-позиции в T-позе (вычитаются). Калибровка: встать в T, нажать R_A или ввести вручную.</div>
         <label><strong>OFFSET</strong> (вычесть из VR, T-поза)</label>
         <div class="coords">Left: <input type="number" id="offset-lx" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-ly" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-lz" value="0" step="0.01" style="width:50px"></div>
         <div class="coords">Right: <input type="number" id="offset-rx" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-ry" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-rz" value="0" step="0.01" style="width:50px"></div>
-        <button id="btn-apply-offset" class="secondary" style="margin-top:6px">Применить offset</button>
+        <div class="mode-row">
+          <button id="btn-apply-offset" class="secondary">Применить offset</button>
+          <button id="btn-reset-offset" class="secondary">Сбросить в 0</button>
+        </div>
       </div>
       <div class="panel">
         <h3>Axis mapping (Quest→body_link)</h3>
         <label>Ремапинг в реальном времени → fast_ik</label>
         <select id="axis-mapping-robot">
-          <option value="none" selected>none (без ремапинга)</option>
-          <option value="xy">xy (x=-y, y=-x, z=z)</option>
+          <option value="xy" selected>xy (x=-y, y=-x, z=z) — рабочий</option>
+          <option value="none">none (без ремапинга)</option>
           <option value="xz">xz</option>
           <option value="yz">yz</option>
           <option value="swap_yz">swap Y↔Z</option>
           <option value="swap_xz">swap X↔Z</option>
+          <option value="inv_y">inv_y (y=-y)</option>
+          <option value="inv_z">inv_z (z=-z)</option>
+          <option value="inv_yz">inv_yz (y=-y, z=-z)</option>
         </select>
+        <div class="coords" style="margin-top:8px; font-size:0.75rem; color:#8b949e;">После маппинга (применяется к данным после xy):</div>
+        <label><input type="checkbox" id="post-swap-yz"> Swap Y↔Z</label>
+        <label><input type="checkbox" id="post-inv-y"> Инвертировать Y</label>
+        <label><input type="checkbox" id="post-inv-z"> Инвертировать Z</label>
+        <label><input type="checkbox" id="post-swap-right-only" title="Swap только для правой руки (если асимметрия)"> Swap только для правой</label>
       </div>
       <div class="panel">
         <h3>Display axes</h3>
@@ -107,14 +119,20 @@
       </div>
       <div class="panel">
         <h3>Operator (raw /quest/poses)</h3>
-        <div class="coords" id="op-head">Head: —</div>
-        <div class="coords" id="op-left">Left: —</div>
-        <div class="coords" id="op-right">Right: —</div>
+        <div class="coords" style="margin-bottom:2px; color:#6e7681;">Quest frame: X Y Z</div>
+        <div class="coords" id="op-head">Head: X=— Y=— Z=—</div>
+        <div class="coords" id="op-left">Left: X=— Y=— Z=—</div>
+        <div class="coords" id="op-right">Right: X=— Y=— Z=—</div>
       </div>
       <div class="panel">
         <h3>Robot target (body_link)</h3>
-        <div class="coords" id="tgt-left">Left: —</div>
-        <div class="coords" id="tgt-right">Right: —</div>
+        <div class="coords" style="margin-bottom:2px; color:#6e7681;">body_link: X вперёд, Y влево, Z вверх</div>
+        <div class="coords" id="tgt-left">Left: X=— Y=— Z=—</div>
+        <div class="coords" id="tgt-right">Right: X=— Y=— Z=—</div>
+      </div>
+      <div class="panel">
+        <h3>Зоны досягаемости</h3>
+        <label><input type="checkbox" id="show-workspace"> Показать зоны досягаемости (max_reach 0.25 м)</label>
       </div>
       <div class="panel">
         <h3>Legend</h3>
@@ -131,7 +149,8 @@
     </aside>
     <main>
       <div id="manual-hint" class="manual-hint" style="display:none">ЛКМ — перетаскивать сферы. ПКМ — вращать вид.</div>
-      <div id="robot-orient" class="robot-orient">body_link: Вперёд=+X | Влево=+Y | Вправо=-Y | Вверх=+Z — зелёная ось = верх</div>
+      <div id="robot-orient" class="robot-orient">body_link: X вперёд | Y влево | Z вверх. Оси: Red=X, Green=Y, Blue=Z</div>
+      <div id="axis-legend" class="robot-orient" style="bottom:auto; top:60px; left:12px;">body_link: X вперёд/назад, Y влево/вправо, Z вверх/вниз. В сцене: Green=Z(верх)</div>
       <div id="label-left" class="sphere-label">Л</div>
       <div id="label-right" class="sphere-label">П</div>
       <div id="canvas-container"></div>
@@ -147,6 +166,7 @@
     let opLeftMesh, opRightMesh, tgtLeftMesh, tgtRightMesh;
     let leftArmLine, rightArmLine;
     let robotSchematic, schematicBody, schematicHead;
+    let leftWorkspaceMesh, rightWorkspaceMesh;
     let hasDebugTargets = false;
     let manualMode = false;
     let manualPosePub = null;
@@ -155,6 +175,7 @@
     let axisMappingPub = null;
     let scaleParamsPub = null;
     let calibrationOffsetPub = null;
+    let postMappingPub = null;
     let xyXPressed = false;
     let xyYPressed = false;
     let manualPublishInterval = null;
@@ -191,6 +212,31 @@
       scene.add(grid);
       const axes = new THREE.AxesHelper(0.15);
       scene.add(axes);
+      // Axis labels (Three.js: Red=X, Green=Y, Blue=Z)
+      const makeLabel = (text, color) => {
+        const c = document.createElement('canvas');
+        c.width = 64; c.height = 64;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = color;
+        ctx.font = 'bold 48px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 32, 32);
+        const tex = new THREE.CanvasTexture(c);
+        const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+        const s = new THREE.Sprite(mat);
+        s.scale.set(0.06, 0.06, 1);
+        return s;
+      };
+      const lblX = makeLabel('X', '#ff4444');
+      lblX.position.set(0.2, 0, 0);
+      scene.add(lblX);
+      const lblY = makeLabel('Y', '#44ff44');
+      lblY.position.set(0, 0.2, 0);
+      scene.add(lblY);
+      const lblZ = makeLabel('Z', '#4444ff');
+      lblZ.position.set(0, 0, 0.2);
+      scene.add(lblZ);
 
       // Robot orientation schematic (body_link: face +X, left +Y, up +Z) — не перекрывает руки
       robotSchematic = new THREE.Group();
@@ -203,6 +249,22 @@
       schematicHead = new THREE.Mesh(headGeo, headMat);
       robotSchematic.add(schematicHead);
       scene.add(robotSchematic);
+
+      // Workspace spheres (max_reach 0.25 m from each shoulder)
+      const MAX_REACH = 0.25;
+      const wsGeo = new THREE.SphereGeometry(MAX_REACH, 24, 24);
+      leftWorkspaceMesh = new THREE.Mesh(wsGeo, new THREE.MeshBasicMaterial({
+        color: 0x00ccff, transparent: true, opacity: 0.12, side: THREE.DoubleSide
+      }));
+      rightWorkspaceMesh = new THREE.Mesh(wsGeo, new THREE.MeshBasicMaterial({
+        color: 0xff9900, transparent: true, opacity: 0.12, side: THREE.DoubleSide
+      }));
+      const lw3 = bodyLinkToThree(L_SHOULDER.x, L_SHOULDER.y, L_SHOULDER.z);
+      const rw3 = bodyLinkToThree(R_SHOULDER.x, R_SHOULDER.y, R_SHOULDER.z);
+      leftWorkspaceMesh.position.set(lw3.x, lw3.y, lw3.z);
+      rightWorkspaceMesh.position.set(rw3.x, rw3.y, rw3.z);
+      scene.add(leftWorkspaceMesh);
+      scene.add(rightWorkspaceMesh);
 
       // Arm lines (shoulder -> target)
       const lineMat = new THREE.LineBasicMaterial({ color: 0x888888 });
@@ -259,6 +321,12 @@
         const h3 = bodyLinkToThree(0.04, 0, 0.03);
         schematicBody.position.set(b3.x, b3.y, b3.z);
         schematicHead.position.set(h3.x, h3.y, h3.z);
+      }
+      if (leftWorkspaceMesh && rightWorkspaceMesh) {
+        const lw3 = bodyLinkToThree(L_SHOULDER.x, L_SHOULDER.y, L_SHOULDER.z);
+        const rw3 = bodyLinkToThree(R_SHOULDER.x, R_SHOULDER.y, R_SHOULDER.z);
+        leftWorkspaceMesh.position.set(lw3.x, lw3.y, lw3.z);
+        rightWorkspaceMesh.position.set(rw3.x, rw3.y, rw3.z);
       }
     }
 
@@ -383,6 +451,9 @@
     function animate() {
       requestAnimationFrame(animate);
       applyAxisMapToTargets();
+      const showWs = document.getElementById('show-workspace')?.checked ?? false;
+      if (leftWorkspaceMesh) leftWorkspaceMesh.visible = showWs;
+      if (rightWorkspaceMesh) rightWorkspaceMesh.visible = showWs;
       if (controls) controls.update();
       updateLabels();
       renderer.render(scene, camera);
@@ -447,8 +518,17 @@
 
     function publishAxisMapping() {
       if (!axisMappingPub || !ros || !ros.isConnected) return;
-      const v = document.getElementById('axis-mapping-robot')?.value || 'swap_xz';
+      const v = document.getElementById('axis-mapping-robot')?.value || 'xy';
       axisMappingPub.publish({ data: v });
+    }
+
+    function publishPostMapping() {
+      if (!postMappingPub || !ros || !ros.isConnected) return;
+      const swap = document.getElementById('post-swap-yz')?.checked ? 1 : 0;
+      const invY = document.getElementById('post-inv-y')?.checked ? 1 : 0;
+      const invZ = document.getElementById('post-inv-z')?.checked ? 1 : 0;
+      const swapRightOnly = document.getElementById('post-swap-right-only')?.checked ? 1 : 0;
+      postMappingPub.publish({ data: [swap, invY, invZ, swapRightOnly] });
     }
 
     function publishPoseMode() {
@@ -478,14 +558,22 @@
     }
 
     function exportSettings() {
-      const axisMap = document.getElementById('axis-mapping-robot')?.value || 'swap_xz';
+      const axisMap = document.getElementById('axis-mapping-robot')?.value || 'xy';
+      const swapYz = document.getElementById('post-swap-yz')?.checked ?? true;
+      const invY = document.getElementById('post-inv-y')?.checked ?? false;
+      const invZ = document.getElementById('post-inv-z')?.checked ?? false;
       const human = document.getElementById('human-arm')?.value || '0.8';
       const robot = document.getElementById('robot-arm')?.value || '0.2';
       const neck = document.getElementById('neck-offset')?.value || '0.25';
       const headX = document.getElementById('head-x')?.value || '0.15';
       const robotZ = document.getElementById('robot-z')?.value || '0.087448';
-      const yaml = `# fast_ik.yaml (axis_mapping + robot_scale)
+      const yaml = `# fast_ik.yaml (axis_mapping + post_mapping + robot_scale)
 axis_mapping: "${axisMap}"
+
+post_mapping:
+  swap_yz: ${swapYz}
+  inv_y: ${invY}
+  inv_z: ${invZ}
 
 robot_scale:
   human_arm_length: ${human}
@@ -507,9 +595,12 @@ robot_scale:
       axisMappingPub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/axis_mapping', messageType: 'std_msgs/String' });
       scaleParamsPub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/scale_params', messageType: 'std_msgs/Float64MultiArray' });
       calibrationOffsetPub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/calibration_offset', messageType: 'std_msgs/Float64MultiArray' });
+      postMappingPub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/post_mapping', messageType: 'std_msgs/Float64MultiArray' });
       publishAxisMapping();
       publishScaleParams();
       publishPoseMode();
+      publishCalibrationOffset();
+      publishPostMapping();
       if (manualMode && manualPublishInterval) clearInterval(manualPublishInterval);
       if (manualMode) manualPublishInterval = setInterval(publishManualPoses, 50);
 
@@ -522,9 +613,9 @@ robot_scale:
           const head = msg.poses[0].position;
           const left = msg.poses[1].position;
           const right = msg.poses[2].position;
-          document.getElementById('op-head').textContent = `Head: ${f(head.x)} ${f(head.y)} ${f(head.z)}`;
-          document.getElementById('op-left').textContent = `Left: ${f(left.x)} ${f(left.y)} ${f(left.z)}`;
-          document.getElementById('op-right').textContent = `Right: ${f(right.x)} ${f(right.y)} ${f(right.z)}`;
+          document.getElementById('op-head').textContent = `Head: X=${f(head.x)} Y=${f(head.y)} Z=${f(head.z)}`;
+          document.getElementById('op-left').textContent = `Left: X=${f(left.x)} Y=${f(left.y)} Z=${f(left.z)}`;
+          document.getElementById('op-right').textContent = `Right: X=${f(right.x)} Y=${f(right.y)} Z=${f(right.z)}`;
           const tL = scalePose(left.x || 0, left.y || 0, left.z || 0, true);
           const tR = scalePose(right.x || 0, right.y || 0, right.z || 0, false);
           opLeftMesh.position.set(tL.x, tL.y, tL.z);
@@ -545,8 +636,8 @@ robot_scale:
           hasDebugTargets = true;
           const left = msg.poses[0].position;
           const right = msg.poses[1].position;
-          document.getElementById('tgt-left').textContent = `Left: ${f(left.x)} ${f(left.y)} ${f(left.z)}`;
-          document.getElementById('tgt-right').textContent = `Right: ${f(right.x)} ${f(right.y)} ${f(right.z)}`;
+          document.getElementById('tgt-left').textContent = `Left: X=${f(left.x)} Y=${f(left.y)} Z=${f(left.z)}`;
+          document.getElementById('tgt-right').textContent = `Right: X=${f(right.x)} Y=${f(right.y)} Z=${f(right.z)}`;
           tgtLeftBodyLink = { x: left.x || 0, y: left.y || 0, z: left.z || 0 };
           tgtRightBodyLink = { x: right.x || 0, y: right.y || 0, z: right.z || 0 };
           applyAxisMapToTargets();
@@ -592,6 +683,10 @@ robot_scale:
     document.getElementById('mode-manual').addEventListener('click', () => setMode('manual'));
     document.getElementById('axis-map').addEventListener('change', () => applyAxisMapToTargets());
     document.getElementById('axis-mapping-robot').addEventListener('change', () => { publishAxisMapping(); applyAxisMapToTargets(); });
+    ['post-swap-yz','post-inv-y','post-inv-z','post-swap-right-only'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', publishPostMapping);
+    });
     ['human-arm','robot-arm','neck-offset','head-x','robot-z'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('change', publishScaleParams);
@@ -599,6 +694,13 @@ robot_scale:
     });
     document.getElementById('btn-export').addEventListener('click', exportSettings);
     document.getElementById('btn-apply-offset').addEventListener('click', publishCalibrationOffset);
+    document.getElementById('btn-reset-offset').addEventListener('click', () => {
+      ['offset-lx','offset-ly','offset-lz','offset-rx','offset-ry','offset-rz'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '0';
+      });
+      publishCalibrationOffset();
+    });
     init3D();
   </script>
 </body>
