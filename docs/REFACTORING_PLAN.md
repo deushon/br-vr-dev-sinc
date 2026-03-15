@@ -1,10 +1,10 @@
 # План рефакторинга системы телеоперации VR
 
-**Статус:** Рефакторинг выполнен (2025-03). Единый пакет `teleop_fetch`, `ainex_teleop` удалён.
+**Статус:** Рефакторинг выполнен. **beta 1.0** (2025-03-15) — первая стабильная версия.
 
 ---
 
-## 1. Текущая реализация (актуальная архитектура)
+## 1. Текущая реализация (beta 1.0)
 
 ### Поток данных
 
@@ -23,26 +23,30 @@
 
 **Примечание:** teleop_fetch публикует `ainex_interfaces/HeadState` (совместимо с ainex_controller).
 
-### Архитектура (реализовано)
+### Архитектура (beta 1.0)
 
 ```
 /quest/poses, /quest/joints
         │
-        ├──────────────────────────────────────┐
-        ▼                                      ▼
-┌─────────────────────┐              ┌─────────────────────┐
-│   fast_ik_node      │              │   teleop_fetch      │
-│   (my_package)      │              │   (единый узел)      │
-│                     │              │                     │
-│ IK → arm_servo_     │   ────────►  │ Подписка на         │
-│ targets             │   /teleop_   │ arm_servo_targets   │
-│                     │   fetch/     │                     │
-│ Публикует:          │   arm_servo_ │ X=enable, Y=disable │
-│ /teleop_fetch/      │   targets    │ Голова: HeadState   │
-│ arm_servo_targets   │              │ → bus_servo         │
-│ /teleop_fetch/      │              │ (единственный       │
-│ debug_target_poses  │              │  издатель)          │
-└─────────────────────┘              └─────────────────────┘
+        ▼
+┌─────────────────────┐
+│   vr_remapper       │  map + R_A calib + scale
+└──────────┬──────────┘
+          │ /teleop_fetch/quest_poses_remapped
+          ▼
+┌─────────────────────┐
+│   pose_source       │  VR | manual_poses
+└──────────┬──────────┘
+          │ /teleop_fetch/poses
+          ▼
+┌─────────────────────┐
+│   fast_ik_node      │  IK → joint→servo
+└──────────┬──────────┘
+          │ /teleop_fetch/arm_servo_targets
+          ▼
+┌─────────────────────┐
+│   teleop_fetch      │  X/Y, head, → bus_servo
+└─────────────────────┘
 ```
 
 ### Маппинг сервоприводов (ID из URDF)
@@ -85,8 +89,9 @@ roslaunch teleop_fetch teleop_fetch.launch   # только teleop_fetch (без
 ```
 
 ### Конфигурация
-- `teleop_fetch/config/teleop.yaml` — VR topics, servo_ids, arm_start_positions, head, arm_servo_targets_topic
-- `my_package/config/fast_ik.yaml` — robot_scale, gripper, move_groups, axis_mapping, left_hand
+- `teleop_fetch/config/teleop.yaml` — servo_ids, arm_start_positions, head, VR topics
+- `teleop_fetch/config/vr_remapper.yaml` — reference_pose, scale (калибровка beta 1.0)
+- `my_package/config/fast_ik.yaml` — gripper, move_groups, left_hand
 
 ### IK conversion (fast_ik_node)
 MoveIt возвращает joint angles (rad). Перед отправкой:

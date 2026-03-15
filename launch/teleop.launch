@@ -56,7 +56,7 @@
     <rosparam command="load" file="$(find teleop_fetch)/config/teleop.yaml"/>
   </node>
 
-  <!-- Calibration: R_A in T-pose -> /teleop_fetch/calibration -->
+  <!-- Calibration_node (legacy T-pose): калибровка R_A теперь в vr_remapper -->
   <node name="teleop_calibration" pkg="teleop_fetch" type="calibration_node.py" output="screen">
     <param name="robot_arm_span" value="0.4"/>
   </node>

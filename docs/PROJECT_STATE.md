@@ -1,5 +1,6 @@
 # Состояние проекта — VR Teleop Ainex
 
+**Версия:** beta 1.0  
 **Дата:** 2025-03-15
 
 ## Обзор
@@ -14,13 +15,14 @@
 
 | Компонент | Описание | Статус |
 |-----------|----------|--------|
-| `teleop_node.py` | Главный узел: head, arms, start/stop | ✅ Работает |
-| `vr_adapter.py` | Подписка на /quest/poses, /quest/joints | ✅ |
+| `teleop_node.py` | Главный узел: head, arms, start/stop | ✅ |
+| `vr_remapper_node.py` | Маппинг осей, R_A калибровка, scale | ✅ beta 1.0 |
+| `pose_source_node.py` | VR (remapped) + manual → /teleop_fetch/poses | ✅ |
 | `head_controller.py` | Pan/tilt по ориентации головы | ✅ |
-| teleop_node._arm_targets_callback | Пересылка arm_servo_targets → bus_servo при controlling | ✅ |
-| `start_stop_controller.py` | X=включить руки, Y=выключить (стартовая поза) | ✅ |
-| `config/teleop.yaml` | Конфиг: VR topics, scale, servo IDs, head | ✅ |
-| `web/teleop_debug.html` | 3D робот, оператор, ручное перетаскивание | ✅ |
+| `start_stop_controller.py` | X=включить руки, Y=выключить | ✅ |
+| `config/teleop.yaml` | servo IDs, arm start, head | ✅ |
+| `config/vr_remapper.yaml` | reference_pose, scale | ✅ |
+| `web/teleop_debug.html` | 3D визуализация, scale, manual drag | ✅ |
 
 **Запуск:** `roslaunch teleop_fetch teleop.launch`
 
@@ -30,16 +32,12 @@
 
 | Компонент | Описание | Статус |
 |-----------|----------|--------|
-| `fast_ik_node.cpp` | IK обеих рук, грипперы, conversion joint→servo | ✅ |
-| `config/fast_ik.yaml` | axis_mapping, robot_scale, left_hand, gripper | ✅ |
+| `fast_ik_node.cpp` | IK обеих рук, gripper, joint→servo conversion | ✅ |
+| `config/fast_ik.yaml` | gripper, move_groups, left_hand | ✅ |
 | Публикует | `/teleop_fetch/arm_servo_targets` | ✅ |
-| Публикует | `/teleop_fetch/teleop_state` (TeleopState) | ✅ |
-| Debug | `/teleop_fetch/debug_target_poses` (PoseArray) | ✅ |
+| Публикует | `/teleop_fetch/debug_target_poses` | ✅ |
 
-**Особенности:**
-- Правая рука: работает в малом диапазоне (см. TODO.md)
-- Левая рука: настройка через `left_hand/offset_sign`, `left_hand/conversion_preset`
-- axis_mapping: `xy` (default), `xz`, `yz`, `none`
+**Примечание:** Маппинг, калибровка, scale — в vr_remapper. fast_ik получает готовые координаты в body_link.
 
 ---
 
@@ -72,29 +70,9 @@
 
 ## Архитектура данных
 
-```
-/quest/poses, /quest/joints
-        │
-        ▼
-pose_source (VR + manual_poses → /teleop_fetch/poses)
-        │
-        ▼
-fast_ik_node
-  - rotate_pose_in_axis (axis_mapping)
-  - offset_pose (hand_center_outer_offset, ± по руке)
-  - scale_pose (robot_to_human_scale)
-  - IK (MoveIt) → joint values
-  - conversion (joint → servo, left/right)
-        │
-        ▼
-/teleop_fetch/arm_servo_targets (SetBusServosPosition)
-        │
-        ▼
-teleop_fetch (single publisher) → /ros_robot_controller/bus_servo/set_position
-        │
-        ├── head_pan_controller/command
-        └── head_tilt_controller/command
-```
+См. [ARCHITECTURE.md](ARCHITECTURE.md) — уровни абстракции, потоки, схема.
+
+Кратко: `/quest/poses` → vr_remapper (map + R_A calib + scale) → pose_source → fast_ik (IK) → teleop_fetch → bus_servo.
 
 ---
 
@@ -102,32 +80,25 @@ teleop_fetch (single publisher) → /ros_robot_controller/bus_servo/set_position
 
 | Файл | Ключевые параметры |
 |------|--------------------|
-| `config/teleop.yaml` | vr_input, robot_scale, servo_ids, arm_start_positions, head |
-| `config/fast_ik.yaml` (my_package) | axis_mapping, robot_scale, left_hand, gripper, move_groups |
+| `config/teleop.yaml` | servo_ids, arm_start_positions, head, VR topics |
+| `config/vr_remapper.yaml` | reference_pose (left/right), scale |
+| `config/fast_ik.yaml` (my_package) | gripper, move_groups, left_hand |
+
+---
+
+## Калибровка (beta 1.0)
+
+**R_A на правом джойстике:** Оператор приводит руки в естественное положение (перед собой, слегка внизу). vr_remapper вычисляет offset = reference_pose - mapped_vr. Эталонная поза робота — в `vr_remapper.yaml`.
+
+**SCALE:** Чувствительность 0.0001..100, топик `/teleop_fetch/scale`, обновляется из UI на лету.
 
 ---
 
 ## Отладка
 
 - **RViz:** `roslaunch teleop_fetch teleop_debug.launch`
-- **Web viz:** rosbridge + `teleop_debug.html` (Display axes: body_link→Three.js)
+- **Web viz:** rosbridge + `teleop_debug.html`
 - **Топики:** `/teleop_fetch/debug_target_poses`, `/teleop_fetch/teleop_state`, `/visualization_marker`
-
----
-
-## Топик /teleop_fetch/calibration
-
-**Тип:** `ainex_interfaces/TeleopCalibration`
-
-Публикуется calibration_node при нажатии R_A, когда оператор в T-позе (руки вытянуты как у робота при инициализации).
-
-| Поле | Тип | Описание |
-|------|-----|----------|
-| offset_left | geometry_msgs/Point | Сырые VR-координаты левой руки в T-позе |
-| offset_right | geometry_msgs/Point | Сырые VR-координаты правой руки в T-позе |
-| scale | float64 | robot_arm_span / human_arm_span (по расстоянию между руками) |
-
-**Использование:** применить offset и scale в fast_ik для калибровки под разных операторов (длина рук, пропорции тела).
 
 ---
 

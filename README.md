@@ -34,7 +34,10 @@ roslaunch teleop_fetch teleop_fetch.launch
 | Topic | Type | Description |
 |-------|------|-------------|
 | `/quest/poses` | PoseArray | VR head + hands |
-| `/quest/joints` | JointState | VR buttons (L_X, L_Y, etc.) |
+| `/quest/joints` | JointState | VR buttons (L_X, L_Y, R_A, etc.) |
+| `/teleop_fetch/quest_poses_remapped` | PoseArray | VR hands after vr_remapper (map + calibration + scale) |
+| `/teleop_fetch/poses` | PoseArray | VR or manual (pose_source merge) |
+| `/teleop_fetch/scale` | Float64 | Чувствительность 0.0001..100, из UI |
 | `/teleop_fetch/arm_servo_targets` | SetBusServosPosition | From fast_ik_node |
 | `/head_pan_controller/command` | HeadState | Pan |
 | `/head_tilt_controller/command` | HeadState | Tilt |
@@ -57,10 +60,11 @@ cd $(rospack find teleop_fetch)/web && python3 -m http.server 8080
 # Open http://localhost:8080/teleop_debug.html
 ```
 
-**Calibration:** Stretch arms in T-pose, press R_A. Publishes to `/teleop_fetch/calibration` (offset + scale).
+**Calibration (beta 1.0):** Приведите руки в естественное положение (перед собой, слегка внизу), нажмите R_A на правом джойстике. Эталонная поза робота задаётся в `config/vr_remapper.yaml`. SCALE (0.0001..100) — чувствительность, обновляется из UI на лету (`/teleop_fetch/scale`).
 
 ## Docs
 
-- [PROJECT_STATE.md](docs/PROJECT_STATE.md) — состояние пакетов, архитектура
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — уровни абстракции, маппинги, потоки данных
+- [PROJECT_STATE.md](docs/PROJECT_STATE.md) — состояние пакетов
 - [REFACTORING_PLAN.md](docs/REFACTORING_PLAN.md) — план рефакторинга (выполнен)
 - [TODO.md](docs/TODO.md) — известные проблемы, баги
