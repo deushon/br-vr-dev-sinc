@@ -20,7 +20,7 @@
 | teleop_node._arm_targets_callback | Пересылка arm_servo_targets → bus_servo при controlling | ✅ |
 | `start_stop_controller.py` | X=включить руки, Y=выключить (стартовая поза) | ✅ |
 | `config/teleop.yaml` | Конфиг: VR topics, scale, servo IDs, head | ✅ |
-| `web/teleop_debug.html` | HTML-визуализация (Three.js, rosbridge) | ✅ + маппинг осей |
+| `web/teleop_debug.html` | 3D робот, оператор, ручное перетаскивание | ✅ |
 
 **Запуск:** `roslaunch teleop_fetch teleop.launch`
 
@@ -73,8 +73,10 @@
 ## Архитектура данных
 
 ```
-/quest/poses (PoseArray: head, left, right)
-/quest/joints (JointState: L_index, L_grip, R_index, R_grip)
+/quest/poses, /quest/joints
+        │
+        ▼
+pose_source (VR + manual_poses → /teleop_fetch/poses)
         │
         ▼
 fast_ik_node
@@ -110,6 +112,22 @@ teleop_fetch (single publisher) → /ros_robot_controller/bus_servo/set_position
 - **RViz:** `roslaunch teleop_fetch teleop_debug.launch`
 - **Web viz:** rosbridge + `teleop_debug.html` (Display axes: body_link→Three.js)
 - **Топики:** `/teleop_fetch/debug_target_poses`, `/teleop_fetch/teleop_state`, `/visualization_marker`
+
+---
+
+## Топик /teleop_fetch/calibration
+
+**Тип:** `ainex_interfaces/TeleopCalibration`
+
+Публикуется calibration_node при нажатии R_A, когда оператор в T-позе (руки вытянуты как у робота при инициализации).
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| offset_left | geometry_msgs/Point | Сырые VR-координаты левой руки в T-позе |
+| offset_right | geometry_msgs/Point | Сырые VR-координаты правой руки в T-позе |
+| scale | float64 | robot_arm_span / human_arm_span (по расстоянию между руками) |
+
+**Использование:** применить offset и scale в fast_ik для калибровки под разных операторов (длина рук, пропорции тела).
 
 ---
 

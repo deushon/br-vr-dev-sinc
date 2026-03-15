@@ -46,7 +46,18 @@ roslaunch teleop_fetch teleop_fetch.launch
 
 ## Web debug
 
-`web/teleop_debug.html` — Rosbridge + Three.js visualization of operator vs robot target poses. Subscribes to `/quest/poses` and `/teleop_fetch/debug_target_poses`.
+`web/teleop_debug.html` — 3D visualization: robot model, operator hands, robot targets. Manual mode: drag green spheres to control arms (publishes to `/teleop_fetch/manual_poses`). Requires rosbridge.
+
+```bash
+# Terminal 1: rosbridge (WebSocket on port 9090)
+roslaunch rosbridge_server rosbridge_websocket.launch
+
+# Terminal 2: serve HTML (or open web/teleop_debug.html in browser)
+cd $(rospack find teleop_fetch)/web && python3 -m http.server 8080
+# Open http://localhost:8080/teleop_debug.html
+```
+
+**Calibration:** Stretch arms in T-pose, press R_A. Publishes to `/teleop_fetch/calibration` (offset + scale).
 
 ## Docs
 

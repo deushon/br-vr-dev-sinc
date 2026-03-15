@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>VR Teleop Debug - Operator vs Robot</title>
+  <title>VR Teleop Debug - Robot & Operator</title>
   <style>
     * { box-sizing: border-box; }
     body { font-family: 'JetBrains Mono', 'Fira Code', monospace; margin: 0; background: #0d1117; color: #c9d1d9; }
@@ -11,7 +11,7 @@
     header { grid-column: 1/-1; padding: 12px 20px; background: #161b22; border-bottom: 1px solid #30363d; }
     header h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
     aside { padding: 16px; background: #161b22; border-right: 1px solid #30363d; overflow-y: auto; }
-    main { padding: 16px; }
+    main { padding: 16px; position: relative; }
     .panel { margin-bottom: 20px; }
     .panel h3 { margin: 0 0 10px; font-size: 0.9rem; color: #8b949e; }
     label { display: block; margin-bottom: 4px; font-size: 0.8rem; }
@@ -20,42 +20,84 @@
     button:hover { background: #2ea043; }
     button.secondary { background: #21262d; }
     button.secondary:hover { background: #30363d; }
+    button.active { background: #1f6feb; }
     .status { padding: 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 12px; }
     .status.connected { background: #23863633; border: 1px solid #238636; }
     .status.disconnected { background: #da363333; border: 1px solid #da3633; }
-    #canvas-container { width: 100%; height: 100%; min-height: 400px; border-radius: 8px; background: #0d1117; border: 1px solid #30363d; }
+    #canvas-container { width: 100%; height: 100%; min-height: 500px; border-radius: 8px; background: #0d1117; border: 1px solid #30363d; }
+    .manual-hint { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); padding: 8px 16px; background: #238636; color: white; border-radius: 6px; font-size: 0.9rem; z-index: 10; }
+    .sphere-label { position: fixed; padding: 2px 6px; background: rgba(0,0,0,0.8); color: white; font-size: 12px; font-weight: bold; border-radius: 4px; pointer-events: none; z-index: 5; display: none; }
+    .robot-orient { position: absolute; bottom: 12px; left: 12px; padding: 6px 10px; background: rgba(0,0,0,0.85); color: #8b949e; font-size: 11px; border-radius: 4px; z-index: 5; }
     .coords { font-size: 0.75rem; font-family: monospace; color: #8b949e; }
+    .mode-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .mode-row button { flex: 1; }
   </style>
 </head>
 <body>
   <div class="layout">
     <header>
-      <h1>VR Teleop Debug — Operator & Robot Pose</h1>
+      <h1>VR Teleop Debug — Operator & Manual Control</h1>
     </header>
     <aside>
       <div class="panel">
         <h3>Rosbridge</h3>
         <label>WebSocket URL</label>
-        <input type="text" id="ws-url" value="ws://localhost:9090" placeholder="ws://host:9090">
+        <input type="text" id="ws-url" value="ws://192.168.20.21:9090" placeholder="ws://host:9090">
         <button id="btn-connect">Connect</button>
         <div id="status" class="status disconnected">Disconnected</div>
       </div>
       <div class="panel">
-        <h3>Display axes</h3>
-        <label>body_link → Three.js</label>
-        <select id="axis-map">
-          <option value="identity">Identity (x,y,z)</option>
-          <option value="ros_zup">ROS Z-up → Y-up (x,y,z)→(x,z,y)</option>
-          <option value="ros_swap">Swap Y↔Z (x,y,z)→(x,z,-y)</option>
-          <option value="ros_xyz">ROS X fwd,Y left,Z up → (-y,z,-x)</option>
+        <h3>Pose source</h3>
+        <div class="mode-row">
+          <button id="mode-vr" class="active">VR (operator)</button>
+          <button id="mode-manual" class="secondary">Manual (drag)</button>
+        </div>
+        <div class="coords" id="mode-status">VR: poses from /quest/poses</div>
+      </div>
+      <div class="panel" id="xy-panel" style="display:none">
+        <h3>Start/Stop (эмуляция X/Y)</h3>
+        <div class="mode-row">
+          <button id="btn-x" class="secondary" title="X = включить управление руками">X Start</button>
+          <button id="btn-y" class="secondary" title="Y = выключить, руки в стартовую позу">Y Stop</button>
+        </div>
+        <div class="coords" id="xy-status">Нажмите X для включения</div>
+      </div>
+      <div class="panel" style="border: 2px solid #238636;">
+        <h3>Калибровка (T-поза)</h3>
+        <label><strong>SCALE</strong> (robot_arm / human_arm)</label>
+        <div class="mode-row">
+          <input type="number" id="human-arm" value="0.8" step="0.1" placeholder="human">
+          <input type="number" id="robot-arm" value="0.2" step="0.01" placeholder="robot">
+        </div>
+        <label><strong>OFFSET</strong> (вычесть из VR, T-поза)</label>
+        <div class="coords">Left: <input type="number" id="offset-lx" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-ly" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-lz" value="0" step="0.01" style="width:50px"></div>
+        <div class="coords">Right: <input type="number" id="offset-rx" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-ry" value="0" step="0.01" style="width:50px"> <input type="number" id="offset-rz" value="0" step="0.01" style="width:50px"></div>
+        <button id="btn-apply-offset" class="secondary" style="margin-top:6px">Применить offset</button>
+      </div>
+      <div class="panel">
+        <h3>Axis mapping (Quest→body_link)</h3>
+        <label>Ремапинг в реальном времени → fast_ik</label>
+        <select id="axis-mapping-robot">
+          <option value="none" selected>none (без ремапинга)</option>
+          <option value="xy">xy (x=-y, y=-x, z=z)</option>
+          <option value="xz">xz</option>
+          <option value="yz">yz</option>
+          <option value="swap_yz">swap Y↔Z</option>
+          <option value="swap_xz">swap X↔Z</option>
         </select>
       </div>
       <div class="panel">
-        <h3>Robot Scale (from config)</h3>
-        <label>human_arm_length</label>
-        <input type="number" id="human-arm" value="0.8" step="0.1">
-        <label>robot_arm_length</label>
-        <input type="number" id="robot-arm" value="0.2" step="0.01">
+        <h3>Display axes</h3>
+        <label>body_link → Three.js (визуализация)</label>
+        <select id="axis-map">
+          <option value="ros_xyz" selected>Робот стоит: X вперёд, Y влево, Z вверх</option>
+          <option value="identity">Identity (может лежать на боку)</option>
+          <option value="ros_zup">ROS Z-up → Y-up</option>
+          <option value="ros_swap">Swap Y↔Z</option>
+        </select>
+      </div>
+      <div class="panel">
+        <h3>Robot Scale (детали)</h3>
         <label>neck_offset</label>
         <input type="number" id="neck-offset" value="0.25" step="0.01">
         <label>big_head_x_offset</label>
@@ -70,61 +112,134 @@
         <div class="coords" id="op-right">Right: —</div>
       </div>
       <div class="panel">
-        <h3>Robot target (from fast_ik)</h3>
+        <h3>Robot target (body_link)</h3>
         <div class="coords" id="tgt-left">Left: —</div>
         <div class="coords" id="tgt-right">Right: —</div>
       </div>
       <div class="panel">
         <h3>Legend</h3>
-        <div class="coords">Red = operator left (client transform)</div>
-        <div class="coords">Blue = operator right (client transform)</div>
-        <div class="coords">Green = robot target (from fast_ik)</div>
-        <div class="coords" style="margin-top:8px;color:#8b949e">Red/blue larger, semi-transparent. Green inside = transform matches.</div>
+        <div class="coords">Red = operator left hand (VR)</div>
+        <div class="coords">Blue = operator right hand (VR)</div>
+        <div class="coords"><strong>Cyan = левая рука, Orange = правая — перетаскивайте в Manual</strong></div>
+        <div class="coords">Gray lines = shoulder → target</div>
+      </div>
+      <div class="panel">
+        <h3>Экспорт настроек</h3>
+        <button id="btn-export">Скопировать настройки</button>
+        <textarea id="export-output" readonly rows="12" style="width:100%; margin-top:8px; font-size:0.75rem; background:#0d1117; border:1px solid #30363d; color:#c9d1d9; padding:8px;"></textarea>
       </div>
     </aside>
     <main>
+      <div id="manual-hint" class="manual-hint" style="display:none">ЛКМ — перетаскивать сферы. ПКМ — вращать вид.</div>
+      <div id="robot-orient" class="robot-orient">body_link: Вперёд=+X | Влево=+Y | Вправо=-Y | Вверх=+Z — зелёная ось = верх</div>
+      <div id="label-left" class="sphere-label">Л</div>
+      <div id="label-right" class="sphere-label">П</div>
       <div id="canvas-container"></div>
     </main>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
   <script>
     let ros = null;
-    let scene, camera, renderer;
+    let scene, camera, renderer, controls;
     let opLeftMesh, opRightMesh, tgtLeftMesh, tgtRightMesh;
+    let leftArmLine, rightArmLine;
+    let robotSchematic, schematicBody, schematicHead;
     let hasDebugTargets = false;
+    let manualMode = false;
+    let manualPosePub = null;
+    let poseModePub = null;
+    let jointsPub = null;
+    let axisMappingPub = null;
+    let scaleParamsPub = null;
+    let calibrationOffsetPub = null;
+    let xyXPressed = false;
+    let xyYPressed = false;
+    let manualPublishInterval = null;
+    let lastQuestPoses = null;
+    let dragTarget = null;
+    let raycaster, mouse, plane, planeNormal, intersectPoint;
+    let tgtLeftBodyLink = { x: 0, y: 0, z: 0 };
+    let tgtRightBodyLink = { x: 0, y: 0, z: 0 };
+
+    // body_link frame: left shoulder ~(0, 0.0525, 0.087), right ~(0, -0.0525, 0.087)
+    const L_SHOULDER = { x: 0, y: 0.0525, z: 0.087 };
+    const R_SHOULDER = { x: 0, y: -0.0525, z: 0.087 };
+    // T-pose: руки вытянуты в стороны (robot_arm_length ~0.2)
+    const T_POSE_LEFT = { x: 0, y: 0.0525 + 0.2, z: 0.087 };
+    const T_POSE_RIGHT = { x: 0, y: -0.0525 - 0.2, z: 0.087 };
 
     function init3D() {
       const container = document.getElementById('canvas-container');
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.01, 50);
-      camera.position.set(0.5, 0.5, 0.8);
-      camera.lookAt(0, 0, 0);
+      camera.position.set(0.4, 0.3, 0.6);
+      camera.lookAt(0, 0, 0.1);
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setSize(container.clientWidth, container.clientHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
       container.appendChild(renderer.domElement);
 
-      const grid = new THREE.GridHelper(2, 20, 0x444444, 0x222222);
+      if (typeof THREE.OrbitControls !== 'undefined') {
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+      }
+
+      const grid = new THREE.GridHelper(0.5, 20, 0x444444, 0x222222);
       scene.add(grid);
-      const axes = new THREE.AxesHelper(0.3);
+      const axes = new THREE.AxesHelper(0.15);
       scene.add(axes);
 
-      const geo = new THREE.SphereGeometry(0.02, 16, 16);
-      const geoLarge = new THREE.SphereGeometry(0.028, 16, 16);
-      opLeftMesh = new THREE.Mesh(geoLarge, new THREE.MeshBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.7 }));
-      opRightMesh = new THREE.Mesh(geoLarge, new THREE.MeshBasicMaterial({ color: 0x4444ff, transparent: true, opacity: 0.7 }));
-      tgtLeftMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x44ff44 }));
-      tgtRightMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x44ff44 }));
-      opLeftMesh.renderOrder = 1;
-      opRightMesh.renderOrder = 1;
+      // Robot orientation schematic (body_link: face +X, left +Y, up +Z) — не перекрывает руки
+      robotSchematic = new THREE.Group();
+      const bodyGeo = new THREE.BoxGeometry(0.04, 0.05, 0.03);
+      const bodyMat = new THREE.MeshBasicMaterial({ color: 0x666666 });
+      schematicBody = new THREE.Mesh(bodyGeo, bodyMat);
+      robotSchematic.add(schematicBody);
+      const headGeo = new THREE.BoxGeometry(0.02, 0.02, 0.02);
+      const headMat = new THREE.MeshBasicMaterial({ color: 0x888888 });
+      schematicHead = new THREE.Mesh(headGeo, headMat);
+      robotSchematic.add(schematicHead);
+      scene.add(robotSchematic);
+
+      // Arm lines (shoulder -> target)
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x888888 });
+      leftArmLine = new THREE.Line(new THREE.BufferGeometry(), lineMat);
+      rightArmLine = new THREE.Line(new THREE.BufferGeometry(), lineMat);
+      scene.add(leftArmLine);
+      scene.add(rightArmLine);
+
+      const geoOp = new THREE.SphereGeometry(0.025, 16, 16);
+      const geoTgt = new THREE.SphereGeometry(0.03, 16, 16);  // larger for easier drag
+      opLeftMesh = new THREE.Mesh(geoOp, new THREE.MeshBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.7 }));
+      opRightMesh = new THREE.Mesh(geoOp, new THREE.MeshBasicMaterial({ color: 0x4444ff, transparent: true, opacity: 0.7 }));
+      tgtLeftMesh = new THREE.Mesh(geoTgt, new THREE.MeshBasicMaterial({ color: 0x00ccff }));   // cyan = левая
+      tgtRightMesh = new THREE.Mesh(geoTgt, new THREE.MeshBasicMaterial({ color: 0xff9900 }));  // orange = правая
+      tgtLeftMesh.userData = { hand: 'left' };
+      tgtRightMesh.userData = { hand: 'right' };
       scene.add(tgtLeftMesh); scene.add(tgtRightMesh);
       scene.add(opLeftMesh); scene.add(opRightMesh);
-      opLeftMesh.visible = false;
-      opRightMesh.visible = false;
-      tgtLeftMesh.visible = false;
-      tgtRightMesh.visible = false;
+      opLeftMesh.visible = opRightMesh.visible = tgtLeftMesh.visible = tgtRightMesh.visible = false;
+
+      // Drag setup
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+      plane = new THREE.Plane();
+      planeNormal = new THREE.Vector3(0, 0, 1);
+      intersectPoint = new THREE.Vector3();
+
+      const canvas = renderer.domElement;
+      canvas.addEventListener('pointerdown', onPointerDown, true);
+      window.addEventListener('pointermove', onMouseMove);
+      window.addEventListener('pointerup', onMouseUp);
+      window.addEventListener('pointercancel', onMouseUp);
+
+      tgtLeftBodyLink = { x: T_POSE_LEFT.x, y: T_POSE_LEFT.y, z: T_POSE_LEFT.z };
+      tgtRightBodyLink = { x: T_POSE_RIGHT.x, y: T_POSE_RIGHT.y, z: T_POSE_RIGHT.z };
+      applyAxisMapToTargets();
+      updateArmLines();
 
       window.addEventListener('resize', () => {
         renderer.setSize(container.clientWidth, container.clientHeight);
@@ -134,8 +249,142 @@
       animate();
     }
 
+    function applyAxisMapToTargets() {
+      const l3 = bodyLinkToThree(tgtLeftBodyLink.x, tgtLeftBodyLink.y, tgtLeftBodyLink.z);
+      const r3 = bodyLinkToThree(tgtRightBodyLink.x, tgtRightBodyLink.y, tgtRightBodyLink.z);
+      tgtLeftMesh.position.set(l3.x, l3.y, l3.z);
+      tgtRightMesh.position.set(r3.x, r3.y, r3.z);
+      if (schematicBody && schematicHead) {
+        const b3 = bodyLinkToThree(0, 0, 0.015);
+        const h3 = bodyLinkToThree(0.04, 0, 0.03);
+        schematicBody.position.set(b3.x, b3.y, b3.z);
+        schematicHead.position.set(h3.x, h3.y, h3.z);
+      }
+    }
+
+    function updateArmLines() {
+      const l3 = bodyLinkToThree(L_SHOULDER.x, L_SHOULDER.y, L_SHOULDER.z);
+      const r3 = bodyLinkToThree(R_SHOULDER.x, R_SHOULDER.y, R_SHOULDER.z);
+      leftArmLine.geometry.setFromPoints([
+        new THREE.Vector3(l3.x, l3.y, l3.z),
+        tgtLeftMesh.position.clone()
+      ]);
+      rightArmLine.geometry.setFromPoints([
+        new THREE.Vector3(r3.x, r3.y, r3.z),
+        tgtRightMesh.position.clone()
+      ]);
+      leftArmLine.geometry.attributes.position.needsUpdate = true;
+      rightArmLine.geometry.attributes.position.needsUpdate = true;
+    }
+
+    function onPointerDown(e) {
+      if (!manualMode) return;
+      if (e.button === 2) {
+        if (controls) {
+          controls.enabled = true;
+          controls.mouseButtons.LEFT = null;
+          controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
+        }
+        return;
+      }
+      if (e.button !== 0 || !ros || !ros.isConnected) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const meshes = [tgtLeftMesh, tgtRightMesh];
+      const hits = raycaster.intersectObjects(meshes);
+      if (hits.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        renderer.domElement.setPointerCapture && renderer.domElement.setPointerCapture(e.pointerId);
+        dragTarget = hits[0].object;
+        setSphereHighlight(dragTarget, true);
+        planeNormal.copy(camera.position).sub(dragTarget.position).normalize();
+        plane.setFromNormalAndCoplanarPoint(planeNormal, dragTarget.position);
+      }
+    }
+
+    function onMouseMove(e) {
+      if (!dragTarget) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      raycaster.ray.intersectPlane(plane, intersectPoint);
+      if (intersectPoint) {
+        dragTarget.position.copy(intersectPoint);
+        const body = threeToBodyLink(intersectPoint.x, intersectPoint.y, intersectPoint.z);
+        if (dragTarget.userData.hand === 'left') tgtLeftBodyLink = body;
+        else tgtRightBodyLink = body;
+      }
+      updateArmLines();
+      publishManualPoses();
+    }
+
+    function onMouseUp(e) {
+      if (e && e.button === 2 && controls) {
+        controls.enabled = false;
+        controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+        controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
+      }
+      if (dragTarget) setSphereHighlight(dragTarget, false);
+      dragTarget = null;
+    }
+
+    function setSphereHighlight(mesh, on) {
+      if (!mesh || !mesh.material) return;
+      mesh.material.color.setHex(on ? 0xffff00 : (mesh.userData.hand === 'left' ? 0x00ccff : 0xff9900));
+      mesh.scale.setScalar(on ? 1.3 : 1);
+    }
+
+    function publishManualPoses() {
+      if (!manualPosePub || !ros || !ros.isConnected) return;
+      const leftBody = tgtLeftBodyLink;
+      const rightBody = tgtRightBodyLink;
+      const headPos = lastQuestPoses?.poses?.[0]?.position || { x: 0, y: 0, z: 0 };
+      const msg = {
+        header: { frame_id: 'body_link', stamp: { secs: 0, nsecs: 0 } },
+        poses: [
+          { position: headPos, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+          { position: leftBody, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+          { position: rightBody, orientation: { x: 0, y: 0, z: 0, w: 1 } }
+        ]
+      };
+      manualPosePub.publish(msg);
+    }
+
+    const labelLeftEl = () => document.getElementById('label-left');
+    const labelRightEl = () => document.getElementById('label-right');
+    const vec = new THREE.Vector3();
+
+    function updateLabels() {
+      const ll = labelLeftEl(), lr = labelRightEl();
+      if (!ll || !lr) return;
+      if (!manualMode || !tgtLeftMesh.visible || !tgtRightMesh.visible) {
+        ll.style.display = lr.style.display = 'none';
+        return;
+      }
+      const rect = renderer.domElement.getBoundingClientRect();
+      vec.copy(tgtLeftMesh.position).project(camera);
+      if (vec.z <= 1) {
+        ll.style.display = 'block';
+        ll.style.left = (rect.left + (vec.x * 0.5 + 0.5) * rect.width - 10) + 'px';
+        ll.style.top = (rect.top + (1 - (vec.y * 0.5 + 0.5)) * rect.height - 10) + 'px';
+      } else ll.style.display = 'none';
+      vec.copy(tgtRightMesh.position).project(camera);
+      if (vec.z <= 1) {
+        lr.style.display = 'block';
+        lr.style.left = (rect.left + (vec.x * 0.5 + 0.5) * rect.width - 10) + 'px';
+        lr.style.top = (rect.top + (1 - (vec.y * 0.5 + 0.5)) * rect.height - 10) + 'px';
+      } else lr.style.display = 'none';
+    }
+
     function animate() {
       requestAnimationFrame(animate);
+      applyAxisMapToTargets();
+      if (controls) controls.update();
+      updateLabels();
       renderer.render(scene, camera);
     }
 
@@ -144,6 +393,14 @@
       if (mode === 'ros_zup') return { x, y: z, z: y };
       if (mode === 'ros_swap') return { x, y: z, z: -y };
       if (mode === 'ros_xyz') return { x: -y, y: z, z: -x };
+      return { x, y, z };
+    }
+
+    function threeToBodyLink(x, y, z) {
+      const mode = document.getElementById('axis-map')?.value || 'identity';
+      if (mode === 'ros_zup') return { x, y: z, z: y };
+      if (mode === 'ros_swap') return { x, y: -z, z: y };
+      if (mode === 'ros_xyz') return { x: -z, y: -x, z: y };
       return { x, y, z };
     }
 
@@ -178,10 +435,89 @@
       });
     }
 
+    function publishJoints() {
+      if (!jointsPub || !ros || !ros.isConnected) return;
+      const msg = {
+        header: { frame_id: '', stamp: { secs: 0, nsecs: 0 } },
+        name: ['L_X', 'L_Y', 'L_grip', 'L_index', 'R_grip', 'R_index', 'R_A', 'R_B'],
+        position: [xyXPressed ? 1 : 0, xyYPressed ? 1 : 0, 0, 0, 0, 0, 0, 0]
+      };
+      jointsPub.publish(msg);
+    }
+
+    function publishAxisMapping() {
+      if (!axisMappingPub || !ros || !ros.isConnected) return;
+      const v = document.getElementById('axis-mapping-robot')?.value || 'swap_xz';
+      axisMappingPub.publish({ data: v });
+    }
+
+    function publishPoseMode() {
+      if (!poseModePub || !ros || !ros.isConnected) return;
+      poseModePub.publish({ data: manualMode ? 'manual' : 'vr' });
+    }
+
+    function publishCalibrationOffset() {
+      if (!calibrationOffsetPub || !ros || !ros.isConnected) return;
+      const lx = parseFloat(document.getElementById('offset-lx')?.value || 0);
+      const ly = parseFloat(document.getElementById('offset-ly')?.value || 0);
+      const lz = parseFloat(document.getElementById('offset-lz')?.value || 0);
+      const rx = parseFloat(document.getElementById('offset-rx')?.value || 0);
+      const ry = parseFloat(document.getElementById('offset-ry')?.value || 0);
+      const rz = parseFloat(document.getElementById('offset-rz')?.value || 0);
+      calibrationOffsetPub.publish({ data: [lx, ly, lz, rx, ry, rz] });
+    }
+
+    function publishScaleParams() {
+      if (!scaleParamsPub || !ros || !ros.isConnected) return;
+      const human = parseFloat(document.getElementById('human-arm')?.value || 0.8);
+      const robot = parseFloat(document.getElementById('robot-arm')?.value || 0.2);
+      const neck = parseFloat(document.getElementById('neck-offset')?.value || 0.25);
+      const headX = parseFloat(document.getElementById('head-x')?.value || 0.15);
+      const robotZ = parseFloat(document.getElementById('robot-z')?.value || 0.087448);
+      scaleParamsPub.publish({ data: [human, robot, neck, headX, robotZ] });
+    }
+
+    function exportSettings() {
+      const axisMap = document.getElementById('axis-mapping-robot')?.value || 'swap_xz';
+      const human = document.getElementById('human-arm')?.value || '0.8';
+      const robot = document.getElementById('robot-arm')?.value || '0.2';
+      const neck = document.getElementById('neck-offset')?.value || '0.25';
+      const headX = document.getElementById('head-x')?.value || '0.15';
+      const robotZ = document.getElementById('robot-z')?.value || '0.087448';
+      const yaml = `# fast_ik.yaml (axis_mapping + robot_scale)
+axis_mapping: "${axisMap}"
+
+robot_scale:
+  human_arm_length: ${human}
+  robot_arm_length: ${robot}
+  neck_offset: ${neck}
+  big_head_x_offset: ${headX}
+  robot_z_offset: ${robotZ}
+`;
+      const ta = document.getElementById('export-output');
+      ta.value = yaml;
+      ta.select();
+      try { navigator.clipboard.writeText(yaml); } catch (_) { document.execCommand('copy'); }
+    }
+
     function subscribe() {
+      manualPosePub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/manual_poses', messageType: 'geometry_msgs/PoseArray' });
+      poseModePub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/pose_mode', messageType: 'std_msgs/String' });
+      jointsPub = new ROSLIB.Topic({ ros, name: '/quest/joints', messageType: 'sensor_msgs/JointState' });
+      axisMappingPub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/axis_mapping', messageType: 'std_msgs/String' });
+      scaleParamsPub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/scale_params', messageType: 'std_msgs/Float64MultiArray' });
+      calibrationOffsetPub = new ROSLIB.Topic({ ros, name: '/teleop_fetch/calibration_offset', messageType: 'std_msgs/Float64MultiArray' });
+      publishAxisMapping();
+      publishScaleParams();
+      publishPoseMode();
+      if (manualMode && manualPublishInterval) clearInterval(manualPublishInterval);
+      if (manualMode) manualPublishInterval = setInterval(publishManualPoses, 50);
+
       const f = (v) => (v != null ? Number(v).toFixed(3) : '0');
-      // Operator poses - red/blue = client transform to body_link
+
       new ROSLIB.Topic({ ros, name: '/quest/poses', messageType: 'geometry_msgs/PoseArray' }).subscribe((msg) => {
+        lastQuestPoses = msg;
+        if (manualMode) return;
         if (msg.poses && msg.poses.length >= 3) {
           const head = msg.poses[0].position;
           const left = msg.poses[1].position;
@@ -194,30 +530,75 @@
           opLeftMesh.position.set(tL.x, tL.y, tL.z);
           opRightMesh.position.set(tR.x, tR.y, tR.z);
           if (!hasDebugTargets) {
-            tgtLeftMesh.position.set(tL.x, tL.y, tL.z);
-            tgtRightMesh.position.set(tR.x, tR.y, tR.z);
+            tgtLeftBodyLink = threeToBodyLink(tL.x, tL.y, tL.z);
+            tgtRightBodyLink = threeToBodyLink(tR.x, tR.y, tR.z);
+            applyAxisMapToTargets();
           }
           opLeftMesh.visible = opRightMesh.visible = tgtLeftMesh.visible = tgtRightMesh.visible = true;
+          updateArmLines();
         }
       });
-      // Robot targets from fast_ik - green = actual IK input
+
       new ROSLIB.Topic({ ros, name: '/teleop_fetch/debug_target_poses', messageType: 'geometry_msgs/PoseArray' }).subscribe((msg) => {
+        if (manualMode) return;
         if (msg.poses && msg.poses.length >= 2) {
           hasDebugTargets = true;
           const left = msg.poses[0].position;
           const right = msg.poses[1].position;
           document.getElementById('tgt-left').textContent = `Left: ${f(left.x)} ${f(left.y)} ${f(left.z)}`;
           document.getElementById('tgt-right').textContent = `Right: ${f(right.x)} ${f(right.y)} ${f(right.z)}`;
-          const tL3 = bodyLinkToThree(left.x || 0, left.y || 0, left.z || 0);
-          const tR3 = bodyLinkToThree(right.x || 0, right.y || 0, right.z || 0);
-          tgtLeftMesh.position.set(tL3.x, tL3.y, tL3.z);
-          tgtRightMesh.position.set(tR3.x, tR3.y, tR3.z);
+          tgtLeftBodyLink = { x: left.x || 0, y: left.y || 0, z: left.z || 0 };
+          tgtRightBodyLink = { x: right.x || 0, y: right.y || 0, z: right.z || 0 };
+          applyAxisMapToTargets();
           tgtLeftMesh.visible = tgtRightMesh.visible = true;
+          updateArmLines();
         }
       });
     }
 
+    function setMode(mode) {
+      manualMode = mode === 'manual';
+      document.getElementById('mode-vr').className = manualMode ? 'secondary' : 'active';
+      document.getElementById('mode-manual').className = manualMode ? 'active' : 'secondary';
+      document.getElementById('mode-status').textContent = manualMode
+        ? 'Manual: перетаскивайте сферы (голубая=левая, оранжевая=правая)'
+        : 'VR: poses from /quest/poses';
+      document.getElementById('manual-hint').style.display = manualMode ? 'block' : 'none';
+      document.getElementById('xy-panel').style.display = manualMode ? 'block' : 'none';
+      if (controls) controls.enabled = !manualMode;  // отключаем вращение сцены в Manual — иначе не перетащить
+      if (manualMode) {
+        tgtLeftMesh.visible = tgtRightMesh.visible = true;
+        tgtLeftBodyLink = { x: T_POSE_LEFT.x, y: T_POSE_LEFT.y, z: T_POSE_LEFT.z };
+        tgtRightBodyLink = { x: T_POSE_RIGHT.x, y: T_POSE_RIGHT.y, z: T_POSE_RIGHT.z };
+        applyAxisMapToTargets();
+      }
+      if (poseModePub && ros && ros.isConnected) publishPoseMode();
+      if (manualPublishInterval) clearInterval(manualPublishInterval);
+      manualPublishInterval = null;
+      if (manualMode && ros && ros.isConnected) {
+        manualPublishInterval = setInterval(publishManualPoses, 50);
+        publishJoints();
+      }
+    }
+
     document.getElementById('btn-connect').addEventListener('click', connect);
+    document.getElementById('btn-x').addEventListener('mousedown', () => { xyXPressed = true; publishJoints(); document.getElementById('xy-status').textContent = 'X нажат — управление включено'; });
+    document.getElementById('btn-x').addEventListener('mouseup', () => { xyXPressed = false; publishJoints(); document.getElementById('xy-status').textContent = xyYPressed ? 'Y нажат' : 'Нажмите X для включения'; });
+    document.getElementById('btn-x').addEventListener('mouseleave', () => { if (xyXPressed) { xyXPressed = false; publishJoints(); } });
+    document.getElementById('btn-y').addEventListener('mousedown', () => { xyYPressed = true; publishJoints(); document.getElementById('xy-status').textContent = 'Y нажат — стоп, руки в стартовую позу'; });
+    document.getElementById('btn-y').addEventListener('mouseup', () => { xyYPressed = false; publishJoints(); document.getElementById('xy-status').textContent = xyXPressed ? 'X нажат' : 'Нажмите X для включения'; });
+    document.getElementById('btn-y').addEventListener('mouseleave', () => { if (xyYPressed) { xyYPressed = false; publishJoints(); } });
+    document.getElementById('mode-vr').addEventListener('click', () => setMode('vr'));
+    document.getElementById('mode-manual').addEventListener('click', () => setMode('manual'));
+    document.getElementById('axis-map').addEventListener('change', () => applyAxisMapToTargets());
+    document.getElementById('axis-mapping-robot').addEventListener('change', () => { publishAxisMapping(); applyAxisMapToTargets(); });
+    ['human-arm','robot-arm','neck-offset','head-x','robot-z'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', publishScaleParams);
+      if (el) el.addEventListener('input', publishScaleParams);
+    });
+    document.getElementById('btn-export').addEventListener('click', exportSettings);
+    document.getElementById('btn-apply-offset').addEventListener('click', publishCalibrationOffset);
     init3D();
   </script>
 </body>

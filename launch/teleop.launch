@@ -38,7 +38,10 @@
     <arg name="rviz_config" value="$(find robot)/launch/moveit.rviz"/>
   </include>
 
-  <!-- Fast IK node: computes IK, publishes to arm_servo_targets (NOT bus_servo) -->
+  <!-- Pose source: VR + manual merge -> /teleop_fetch/poses -->
+  <node name="pose_source" pkg="teleop_fetch" type="pose_source_node.py" output="screen"/>
+
+  <!-- Fast IK node: subscribes to /teleop_fetch/poses, publishes arm_servo_targets -->
   <node name="fast_ik_node" pkg="my_package" type="fast_ik_node" output="screen">
     <rosparam command="load" file="$(find my_package)/config/fast_ik.yaml"/>
   </node>
@@ -46,5 +49,10 @@
   <!-- teleop_fetch: single publisher to bus_servo, head, X/Y start/stop -->
   <node name="teleop_fetch" pkg="teleop_fetch" type="teleop_node.py" output="screen">
     <rosparam command="load" file="$(find teleop_fetch)/config/teleop.yaml"/>
+  </node>
+
+  <!-- Calibration: R_A in T-pose -> /teleop_fetch/calibration -->
+  <node name="teleop_calibration" pkg="teleop_fetch" type="calibration_node.py" output="screen">
+    <param name="robot_arm_span" value="0.4"/>
   </node>
 </launch>
