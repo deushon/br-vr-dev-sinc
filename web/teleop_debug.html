@@ -92,8 +92,8 @@
           <option value="inv_z">inv_z (z=-z)</option>
           <option value="inv_yz">inv_yz (y=-y, z=-z)</option>
         </select>
-        <div class="coords" style="margin-top:8px; font-size:0.75rem; color:#8b949e;">После маппинга (применяется к данным после xy):</div>
-        <label><input type="checkbox" id="post-swap-yz"> Swap Y↔Z</label>
+        <div class="coords" style="margin-top:8px; font-size:0.75rem; color:#8b949e;">Swap Y↔Z=OFF: xy уже с swap (-y,z,-x). ON: старый xy (-y,-x,z)</div>
+        <label><input type="checkbox" id="post-swap-yz"> Swap Y↔Z (вернуть старый маппинг)</label>
         <label><input type="checkbox" id="post-inv-y"> Инвертировать Y</label>
         <label><input type="checkbox" id="post-inv-z"> Инвертировать Z</label>
         <label><input type="checkbox" id="post-swap-right-only" title="Swap только для правой руки (если асимметрия)"> Swap только для правой</label>
@@ -481,8 +481,14 @@
       const hx = parseFloat(document.getElementById('head-x').value);
       const robotZ = parseFloat(document.getElementById('robot-z').value);
       const handOff = isLeft ? 0.05 : -0.05;
-      const rx = -y, ry = -x;
-      const ox = rx + hx, oy = ry + handOff, oz = z - neck;
+      const swapYz = document.getElementById('post-swap-yz')?.checked ?? false;
+      const invY = document.getElementById('post-inv-y')?.checked ?? false;
+      const invZ = document.getElementById('post-inv-z')?.checked ?? false;
+      // axis xy по умолчанию: (-y, z, -x). post-swap=ON даёт старый (-y, -x, z)
+      let bx = -y, by = swapYz ? -x : z, bz = swapYz ? z : -x;
+      if (invY) by = -by;
+      if (invZ) bz = -bz;
+      const ox = bx + hx, oy = by + handOff, oz = bz - neck;
       const body = { x: ox * scale, y: oy * scale, z: oz * scale + robotZ };
       return bodyLinkToThree(body.x, body.y, body.z);
     }

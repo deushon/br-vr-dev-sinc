@@ -1,116 +1,66 @@
 #!/usr/bin/env python3
 """
-VR Remapper: ремаппинг ТОЛЬКО данных контроллеров Quest → body_link.
+VR Remapper: единственное место преобразования данных контроллеров.
 
-Подписывается на /quest/poses, применяет axis_mapping и post_mapping
-только к позициям левой и правой руки (poses[1], poses[2]).
-Голова (poses[0]) передаётся без изменений.
+Подписывается на /quest/poses, применяет ТОЛЬКО функцию _controller_to_body_link
+к позициям левой и правой руки. Голова передаётся без изменений.
 
 Публикует в /teleop_fetch/quest_poses_remapped.
-Manual mode не затрагивается — pose_source использует manual_poses напрямую.
 """
 
+import copy
 import rospy
 from geometry_msgs.msg import PoseArray
-from std_msgs.msg import String, Float64MultiArray
 
 
-def _apply_axis_mapping(x, y, z, mapping):
-    """Quest frame → промежуточный body_link (как в fast_ik rotate_pose_in_axis)."""
-    if mapping == "xz":
-        return (-z, y, -x)
-    if mapping == "yz":
-        return (x, -z, -y)
-    if mapping == "swap_yz":
-        return (x, z, y)
-    if mapping == "swap_xz":
-        return (z, y, x)
-    if mapping == "none":
-        return (x, y, z)
-    if mapping == "inv_y":
-        return (x, -y, z)
-    if mapping == "inv_z":
-        return (x, y, -z)
-    if mapping == "inv_yz":
-        return (x, -y, -z)
-    # "xy" default
-    return (-y, -x, z)
+def _controller_to_body_link(x, y, z, is_left):
+    """
+    ЕДИНСТВЕННОЕ МЕСТО: поменять местами значения и знаки для каждого контроллера.
 
+    Вход: x, y, z — сырые координаты с Quest (position.x, .y, .z)
+    Выход: (x_out, y_out, z_out) для body_link (X вперёд, Y влево, Z вверх)
 
-def _apply_post_mapping(x, y, z, swap_yz, inv_y, inv_z, swap_right_only, is_right):
-    """Swap Y↔Z и инверсии — только для контроллеров."""
-    do_swap = swap_yz and (not swap_right_only or is_right)
-    if do_swap:
-        y, z = z, y
-    if inv_y:
-        y = -y
-    if inv_z:
-        z = -z
-    return x, y, z
+    Примеры:
+      swap Y и Z:     return (x, z, y)
+      инвертировать Y: return (x, -y, z)
+      swap + инверт:  return (x, -z, -y)
+    """
+    if is_left:
+        # Левый контроллер
+        return (z, -x, y)
+    else:
+        # Правый контроллер
+        return (z, -x, y)
 
 
 class VRRemapperNode:
     def __init__(self):
         rospy.init_node('vr_remapper', anonymous=False)
         self.quest_poses = None
-        self.axis_mapping = rospy.get_param('~axis_mapping', 'xy')
-        self.swap_yz = False
-        self.inv_y = False
-        self.inv_z = False
-        self.swap_right_only = False
-
         self.pub = rospy.Publisher('/teleop_fetch/quest_poses_remapped', PoseArray, queue_size=1)
         rospy.Subscriber('/quest/poses', PoseArray, self._quest_cb)
-        rospy.Subscriber('/teleop_fetch/axis_mapping', String, self._axis_cb)
-        rospy.Subscriber('/teleop_fetch/post_mapping', Float64MultiArray, self._post_cb)
-
-        rospy.loginfo('vr_remapper: Quest controllers -> body_link (axis mapping + post_mapping)')
+        rospy.loginfo('vr_remapper: Quest -> body_link (только _controller_to_body_link)')
 
     def _quest_cb(self, msg):
         self.quest_poses = msg
 
-    def _axis_cb(self, msg):
-        self.axis_mapping = msg.data
-
-    def _post_cb(self, msg):
-        if len(msg.data) >= 3:
-            self.swap_yz = msg.data[0] != 0
-            self.inv_y = msg.data[1] != 0
-            self.inv_z = msg.data[2] != 0
-            self.swap_right_only = len(msg.data) >= 4 and msg.data[3] != 0
-
     def _publish(self, event):
         if not self.quest_poses or len(self.quest_poses.poses) < 3:
             return
-        out = PoseArray()
-        out.header = self.quest_poses.header
-        out.poses = list(self.quest_poses.poses)  # copy
+        out = copy.deepcopy(self.quest_poses)
 
-        # Head — без изменений
-        # out.poses[0] = self.quest_poses.poses[0].position unchanged
-
-        # Left hand (index 1)
         p = self.quest_poses.poses[1].position
-        x, y, z = _apply_axis_mapping(p.x, p.y, p.z, self.axis_mapping)
-        x, y, z = _apply_post_mapping(x, y, z, self.swap_yz, self.inv_y, self.inv_z,
-                                      self.swap_right_only, is_right=False)
-        out.poses[1].position.x = x
-        out.poses[1].position.y = y
-        out.poses[1].position.z = z
+        x, y, z = _controller_to_body_link(p.x, p.y, p.z, is_left=True)
+        out.poses[1].position.x, out.poses[1].position.y, out.poses[1].position.z = x, y, z
 
-        # Right hand (index 2)
         p = self.quest_poses.poses[2].position
-        x, y, z = _apply_axis_mapping(p.x, p.y, p.z, self.axis_mapping)
-        x, y, z = _apply_post_mapping(x, y, z, self.swap_yz, self.inv_y, self.inv_z,
-                                      self.swap_right_only, is_right=True)
-        out.poses[2].position.x = x
-        out.poses[2].position.y = y
-        out.poses[2].position.z = z
+        x, y, z = _controller_to_body_link(p.x, p.y, p.z, is_left=False)
+        out.poses[2].position.x, out.poses[2].position.y, out.poses[2].position.z = x, y, z
 
         self.pub.publish(out)
 
     def run(self):
-        rospy.Timer(rospy.Duration(0.02), self._publish)  # 50 Hz
+        rospy.Timer(rospy.Duration(0.02), self._publish)
         rospy.spin()
 
 
