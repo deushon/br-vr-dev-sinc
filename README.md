@@ -1,130 +1,49 @@
 # Teleop Fetch
 
-ROS пакет для телеоперации робота Fetch с использованием VR гарнитуры Quest.
+VR teleoperation for Ainex robot — unified head, arms, grippers, start/stop. Single point of publication to bus_servo.
 
-## Возможности
-
-- Управление головой робота на основе положения головы оператора
-- Автоматическая установка стартовой позы рук при запуске
-- **Калибровка и управление руками через VR контроллеры**
-- **Обратная кинематика с масштабированием 1:5**
-- **Управление захватами рук**
-- Готовность к VR телеоперации
-- Настраиваемые параметры чувствительности
-
-## Зависимости
-
-- ROS (tested with ROS Noetic)
-- Python 3
-- NumPy
-- geometry_msgs
-- sensor_msgs
-- std_msgs
-
-## Установка
-
-1. Убедитесь, что у вас установлен ROS
-2. Скопируйте пакет в ваш workspace
-3. Выполните `catkin_make` или `catkin build`
-
-## Использование
-
-### Запуск ноды
+## Quick start
 
 ```bash
-# Прямой запуск
-rosrun teleop_fetch fetcher.py
+# Full stack: robot, move_group, fast_ik, teleop
+roslaunch teleop_fetch teleop.launch
 
-# Или через launch файл
+# With RViz for debugging
+roslaunch teleop_fetch teleop_debug.launch
+
+# Minimal: teleop node only (no robot, move_group, fast_ik)
 roslaunch teleop_fetch teleop_fetch.launch
 ```
 
-### Параметры
+## Features
 
-- `head_sensitivity` (по умолчанию: 1.0) - чувствительность управления головой
-- `max_head_pan` (по умолчанию: 2.0) - максимальный поворот головы влево/вправо
-- `max_head_tilt` (по умолчанию: 2.0) - максимальный наклон головы вверх/вниз
-- `movement_duration` (по умолчанию: 0.2) - время на перемещение головы
+- **Head control** — VR head orientation → pan/tilt (ainex_interfaces/HeadState)
+- **Arms** — fast_ik_node publishes to `/teleop_fetch/arm_servo_targets`, teleop_fetch forwards to bus_servo when enabled
+- **Grippers** — reset on stop
+- **X/Y buttons** — X = enable arm control, Y = disable (return to start pose)
 
-### Топики
+## Dependencies
 
-#### Входные топики:
-- `/quest/poses` (geometry_msgs/PoseArray) - данные о положении головы и рук оператора
-- `/quest/joints` (sensor_msgs/JointState) - данные о суставах рук оператора
+- rospy, geometry_msgs, sensor_msgs, std_msgs
+- ainex_interfaces (HeadState)
+- ros_robot_controller
+- robot, my_package (for full stack)
 
-#### Выходные топики:
-- `/head_pan_controller/command` (teleop_fetch/HeadCommand) - команды поворота головы {position, duration}
-- `/head_tilt_controller/command` (teleop_fetch/HeadCommand) - команды наклона головы {position, duration}
-- `/ros_robot_controller/bus_servo/set_position` (ros_robot_controller/SetBusServosPosition) - команды управления руками
+## Topics
 
-## Структура кода
+| Topic | Type | Description |
+|-------|------|-------------|
+| `/quest/poses` | PoseArray | VR head + hands |
+| `/quest/joints` | JointState | VR buttons (L_X, L_Y, etc.) |
+| `/teleop_fetch/arm_servo_targets` | SetBusServosPosition | From fast_ik_node |
+| `/head_pan_controller/command` | HeadState | Pan |
+| `/head_tilt_controller/command` | HeadState | Tilt |
+| `/ros_robot_controller/bus_servo/set_position` | SetBusServosPosition | Single output to servos |
 
-Код организован в класс `TeleopFetcher` с методами:
+## Config
 
-- `pose_callback()` - обработка данных о положении головы и рук
-- `joints_callback()` - обработка данных о суставах рук
-- `process_head_control()` - логика управления головой
-- `process_arms_control()` - заготовка для управления руками
-- `set_arms_to_start_position()` - установка стартовой позы рук
+`config/teleop.yaml` — VR topics, servo IDs, arm start positions, head params, arm_servo_targets_topic.
 
-## Управление руками
+## Web debug
 
-### Стартовые позиции сервоприводов
-
-При запуске ноды автоматически устанавливаются следующие позиции:
-
-**Правая рука:**
-- ID14: 126 - r_sho_pitch (правое плечо вперед-назад)
-- ID16: 167 - r_sho_roll (правое плечо вверх-вниз)  
-- ID18: 498 - r_el_pitch (правое предплечье сгибание)
-- ID20: 956 - r_el_yaw (правое предплечье поворот)
-- ID22: 500 - r_gripper (правый захват)
-
-**Левая рука:**
-- ID13: 874 - l_sho_pitch (левое плечо вперед-назад)
-- ID15: 833 - l_sho_roll (левое плечо вверх-вниз)
-- ID17: 502 - l_el_pitch (левое предплечье сгибание)  
-- ID19: 44 - l_el_yaw (левое предплечье поворот)
-- ID21: 500 - l_gripper (левый захват)
-
-### Тестирование
-
-Для тестирования установки стартовой позы рук:
-
-```bash
-rosrun teleop_fetch test_arm_setup.py
-```
-
-## Управление руками через VR
-
-### Система калибровки
-
-1. **Запуск калибровки**: Нажмите кнопку **X** на левом контроллере
-2. **Позиционирование**: Выставьте руки в стартовую позу (соответствующую начальной позе робота)
-3. **Завершение калибровки**: Снова нажмите кнопку **X**
-4. **Управление**: Двигайте руками и головой - робот будет повторять движения с масштабированием 1:5
-5. **Остановка**: Нажмите кнопку **Y** для остановки управления и возврата в стартовую позу
-
-**Примечание**: Управление головой автоматически включается/отключается вместе с управлением руками
-
-### Управление захватами
-
-- **Сжимание**: Нажмите кнопку **index** (указательный палец) на контроллере
-- **Разжимание**: Нажмите кнопку **grip** (хватка) на контроллере
-- **Запоминание**: Если отпустить кнопки, захват остается в последнем положении
-- **Центральное положение**: 500 (при инициализации и сбросе)
-- **Пределы движения**: ±200 от центрального положения (300-700)
-- **Инверсия**: Левый захват работает инвертированно
-
-### Обратная кинематика
-
-Система использует упрощенную обратную кинематику:
-- **X-смещение** → поворот плеча вперед-назад
-- **Y-смещение** → подъем плеча вверх-вниз
-- **Z-смещение** → поворот предплечья
-
-Масштабирование: робот в 5 раз меньше оператора (коэффициент 0.2)
-
-## Будущие расширения
-
-Код готов для добавления более сложной обратной кинематики и дополнительных функций управления.
+`web/teleop_debug.html` — Rosbridge + Three.js visualization of operator vs robot target poses. Subscribes to `/quest/poses` and `/teleop_fetch/debug_target_poses`.
