@@ -47,3 +47,9 @@ roslaunch teleop_fetch teleop_fetch.launch
 ## Web debug
 
 `web/teleop_debug.html` — Rosbridge + Three.js visualization of operator vs robot target poses. Subscribes to `/quest/poses` and `/teleop_fetch/debug_target_poses`.
+
+## Docs
+
+- [PROJECT_STATE.md](docs/PROJECT_STATE.md) — состояние пакетов, архитектура
+- [REFACTORING_PLAN.md](docs/REFACTORING_PLAN.md) — план рефакторинга (выполнен)
+- [TODO.md](docs/TODO.md) — известные проблемы, баги
