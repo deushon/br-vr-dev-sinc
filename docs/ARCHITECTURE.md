@@ -1,6 +1,6 @@
 # VR Teleop Architecture — Abstraction Levels and Data Flows
 
-**Version:** beta 1.0 (2025-03-15)
+**Version:** 2.0 beta (2025-03-15)
 
 ---
 

@@ -1,11 +1,11 @@
-# Project State — VR Teleop Ainex
+# Project State — VR Teleop
 
-**Version:** beta 1.0  
+**Version:** 2.0 beta  
 **Date:** 2025-03-15
 
 ## Overview
 
-Unified VR teleoperation for the Ainex robot: head, arms, grippers, X/Y start/stop. A single publisher to `bus_servo`.
+Unified VR teleoperation for dual-arm robots: head, arms, grippers, X/Y start/stop. A single publisher to `bus_servo`.
 
 ---
 

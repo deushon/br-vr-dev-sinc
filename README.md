@@ -1,8 +1,8 @@
 # Teleop Fetch
 
-ROS package for robot teleoperation using a Quest VR headset (originally built for Fetch, now suitable for general dual-arm ROS1 Noetic robots).
+ROS package for dual-arm robot teleoperation using a Quest VR headset on ROS1 Noetic.
 
-> This package started as a Fetch teleoperation stack and was then extended into a more general VR teleop node for dual‑arm robots on ROS1 Noetic. Ainex is the first robot family with full configuration support (see the `ainex_moveit` config package).
+> `teleop_fetch` is the historical/internal package name. The code is robot-agnostic and not tied to any specific vendor robot; Ainex is simply the first robot family with a full configuration and MoveIt integration (see the `ainex_moveit` config package).
 
 ## Features
 
@@ -38,17 +38,13 @@ ROS package for robot teleoperation using a Quest VR headset (originally built f
 
 ### Launching the node
 
-Classic Fetch usage:
+Minimal teleop node (head + arms + start/stop):
 
 ```bash
-# Direct launch (legacy flow)
-rosrun teleop_fetch fetcher.py
-
-# Or via launch file
 roslaunch teleop_fetch teleop_fetch.launch
 ```
 
-Full Ainex VR teleop stack:
+Full VR teleop stack (robot + MoveIt + IK + teleop):
 
 ```bash
 # Full stack: robot, move_group, fast_ik, teleop
