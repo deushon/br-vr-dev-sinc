@@ -1,8 +1,54 @@
 # Teleop Fetch
 
-VR teleoperation for Ainex robot — unified head, arms, grippers, start/stop. Single point of publication to bus_servo.
+ROS package for robot teleoperation using a Quest VR headset (originally built for Fetch, now suitable for general dual-arm ROS1 Noetic robots).
 
-## Quick start
+> This package started as a Fetch teleoperation stack and was then extended into a more general VR teleop node for dual‑arm robots on ROS1 Noetic. Ainex is the first robot family with full configuration support (see the `ainex_moveit` config package).
+
+## Features
+
+- **Robot head control based on operator head position**
+- **Automatic arm start pose setup on launch**
+- **Calibration and arm control via VR controllers**
+- **Inverse kinematics with 1:5 scaling**
+- **Arm gripper control**
+- Ready for VR teleoperation
+- Configurable sensitivity parameters
+- **Extended dual‑arm support**:
+  - Unified head/arms/grippers start/stop with X/Y buttons
+  - Single publisher to `/ros_robot_controller/bus_servo/set_position`
+  - Dataset recording and upload API for `.hbr` datasets
+
+## Dependencies
+
+- ROS (tested with ROS Noetic)
+- Python 3
+- NumPy
+- `rospy`, `geometry_msgs`, `sensor_msgs`, `std_msgs`
+- `ainex_interfaces` (HeadState) or equivalent head/arm interfaces
+- `ros_robot_controller` (for bus servo control) or an adapter layer
+- `robot`, `my_package` (for MoveIt/IK and robot-specific config)
+
+## Installation
+
+1. Ensure ROS is installed.
+2. Copy the package to your workspace.
+3. Run `catkin_make` or `catkin build`.
+
+## Usage
+
+### Launching the node
+
+Classic Fetch usage:
+
+```bash
+# Direct launch (legacy flow)
+rosrun teleop_fetch fetcher.py
+
+# Or via launch file
+roslaunch teleop_fetch teleop_fetch.launch
+```
+
+Full Ainex VR teleop stack:
 
 ```bash
 # Full stack: robot, move_group, fast_ik, teleop
@@ -10,82 +56,125 @@ roslaunch teleop_fetch teleop.launch
 
 # With RViz for debugging
 roslaunch teleop_fetch teleop_debug.launch
-
-# Minimal: teleop node only (no robot, move_group, fast_ik)
-roslaunch teleop_fetch teleop_fetch.launch
 ```
 
-## Features
+### Parameters (legacy Fetch head control)
 
-- **Head control** — VR head orientation → pan/tilt (ainex_interfaces/HeadState)
-- **Arms** — fast_ik_node publishes to `/teleop_fetch/arm_servo_targets`, teleop_fetch forwards to bus_servo when enabled
-- **Grippers** — reset on stop
-- **X/Y buttons** — X = enable arm control, Y = disable (return to start pose)
-- **Dataset recording** — `/record_sessions` start/stop drives robot-side `.hbr` recording
-- **Upload API** — headset sends `POST /upload_dataset` to port `9191`, payload is attached to matching dataset session
+- `head_sensitivity` (default: 1.0) - head control sensitivity
+- `max_head_pan` (default: 2.0) - maximum head rotation left/right
+- `max_head_tilt` (default: 2.0) - maximum head tilt up/down
+- `movement_duration` (default: 0.2) - head movement time
 
-## Dependencies
+### Topics (core)
 
-- rospy, geometry_msgs, sensor_msgs, std_msgs
-- ainex_interfaces (HeadState)
-- ros_robot_controller
-- robot, my_package (for full stack)
+#### Input topics:
 
-## Topics
+- `/quest/poses` (`geometry_msgs/PoseArray`) - operator head and hand position data
+- `/quest/joints` (`sensor_msgs/JointState`) - operator arm joint and button data
 
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/quest/poses` | PoseArray | VR head + hands |
-| `/quest/joints` | JointState | VR buttons (L_X, L_Y, R_A, etc.) |
-| `/teleop_fetch/quest_poses_remapped` | PoseArray | VR hands after vr_remapper (map + calibration + scale) |
-| `/teleop_fetch/poses` | PoseArray | VR or manual (pose_source merge) |
-| `/teleop_fetch/scale` | Float64 | Sensitivity 0.0001..100, from UI |
-| `/teleop_fetch/arm_servo_targets` | SetBusServosPosition | From fast_ik_node |
-| `/head_pan_controller/command` | HeadState | Pan |
-| `/head_tilt_controller/command` | HeadState | Tilt |
-| `/ros_robot_controller/bus_servo/set_position` | SetBusServosPosition | Single output to servos |
-| `/record_sessions` | String(JSON) | Dataset lifecycle event (`start|stop`, `record_id`, timing metadata) |
+#### Output topics:
 
-## Dataset recording quick start
+- `/head_pan_controller/command` (`teleop_fetch/HeadCommand` or `ainex_interfaces/HeadState`) - head pan commands
+- `/head_tilt_controller/command` (`teleop_fetch/HeadCommand` or `ainex_interfaces/HeadState`) - head tilt commands
+- `/ros_robot_controller/bus_servo/set_position` (`ros_robot_controller/SetBusServosPosition`) - arm control commands
 
-Dataset services are enabled in `teleop.launch` by default. You can disable them with:
+#### Ainex-specific topics:
+
+- `/teleop_fetch/quest_poses_remapped` (`PoseArray`) - VR poses after mapping + calibration + scale
+- `/teleop_fetch/poses` (`PoseArray`) - merged poses (VR/manual)
+- `/teleop_fetch/scale` (`Float64`) - sensitivity 0.0001..100 from UI
+- `/teleop_fetch/arm_servo_targets` (`SetBusServosPosition`) - IK outputs from `fast_ik_node`
+- `/record_sessions` (`std_msgs/String(JSON)`) - dataset lifecycle events
+
+## Code structure
+
+Legacy Fetch implementation is organized around the `TeleopFetcher` class:
+
+- `pose_callback()` - process head and hand position data
+- `joints_callback()` - process arm joint data
+- `process_head_control()` - head control logic
+- `process_arms_control()` - arm control logic
+- `set_arms_to_start_position()` - set arm start pose
+
+New Ainex teleop stack adds:
+
+- `teleop_node.py` — main VR teleop node (head, arms, start/stop).
+- `vr_remapper_node.py` — axis mapping, R_A calibration, scale.
+- `pose_source_node.py` — multiplexing VR and manual poses.
+- `dataset_recorder_node.py`, `dataset_upload_server.py`, `episode_recorder.py` — `.hbr` dataset pipeline.
+
+## Arm control
+
+### Servo start positions (legacy Fetch)
+
+The following positions are automatically set when the node launches:
+
+**Right arm:**
+- ID14: 126 - r_sho_pitch (right shoulder forward-backward)
+- ID16: 167 - r_sho_roll (right shoulder up-down)
+- ID18: 498 - r_el_pitch (right forearm bend)
+- ID20: 956 - r_el_yaw (right forearm rotation)
+- ID22: 500 - r_gripper (right gripper)
+
+**Left arm:**
+- ID13: 874 - l_sho_pitch (left shoulder forward-backward)
+- ID15: 833 - l_sho_roll (left shoulder up-down)
+- ID17: 502 - l_el_pitch (left forearm bend)
+- ID19: 44 - l_el_yaw (left forearm rotation)
+- ID21: 500 - l_gripper (left gripper)
+
+### Testing
+
+To test arm start pose setup:
 
 ```bash
-roslaunch teleop_fetch teleop.launch enable_dataset_recording:=false
+rosrun teleop_fetch test_arm_setup.py
 ```
 
-Default recorder config:
+## VR arm control
 
-- `config/dataset_recorder.yaml`
-- camera topic: `/camera/image_raw`
-- imu topic: `/imu`
-- joints topic: `/joint_states`
-- upload API: `http://<robot-ip>:9191/upload_dataset`
+### Calibration system
 
-## Config
+1. **Start calibration**: Press **X** button on left controller.
+2. **Positioning**: Position arms in start pose (matching robot initial pose).
+3. **Finish calibration**: Press **X** again.
+4. **Control**: Move arms and head — robot will replicate movements with 1:5 scaling.
+5. **Stop**: Press **Y** to stop control and return to start pose.
 
-`config/teleop.yaml` — VR topics, servo IDs, arm start positions, head params, arm_servo_targets_topic.
+**Note**: Head control is automatically enabled/disabled with arm control.
 
-## Web debug
+### Gripper control
 
-`web/teleop_debug.html` — 3D visualization: robot model, operator hands, robot targets. Manual mode: drag green spheres to control arms (publishes to `/teleop_fetch/manual_poses`). Requires rosbridge.
+- **Close**: Press **index** (trigger) button on controller.
+- **Open**: Press **grip** button on controller.
+- **Memory**: If buttons are released, gripper stays in the last position.
+- **Center position**: 500 (on init and reset).
+- **Movement limits**: ±200 from center (300–700).
+- **Inversion**: Left gripper works inverted.
 
-```bash
-# Terminal 1: rosbridge (WebSocket on port 9090)
-roslaunch rosbridge_server rosbridge_websocket.launch
+### Inverse kinematics
 
-# Terminal 2: serve HTML (or open web/teleop_debug.html in browser)
-cd $(rospack find teleop_fetch)/web && python3 -m http.server 8080
-# Open http://localhost:8080/teleop_debug.html
-```
+The system uses simplified inverse kinematics:
 
-**Calibration (beta 1.0):** Bring hands to natural position (in front, slightly lower), press R_A on right joystick. Reference pose is in `config/vr_remapper.yaml`. SCALE (0.0001..100) — sensitivity, live update from UI (`/teleop_fetch/scale`).
+- **X-offset** → shoulder rotation forward-backward.
+- **Y-offset** → shoulder lift up-down.
+- **Z-offset** → forearm rotation.
 
-## Docs
+Scaling: robot is 5x smaller than operator (coefficient 0.2).
 
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — abstraction levels, mappings, data flows
-- [PROJECT_STATE.md](docs/PROJECT_STATE.md) — package status
-- [REFACTORING_PLAN.md](docs/REFACTORING_PLAN.md) — refactoring plan (done)
-- [TODO.md](docs/TODO.md) — known issues, bugs
-- [TELEOP_DATAS.md](docs/TELEOP_DATAS.md) — headset event and upload payload contract
-- [HBR.md](docs/HBR.md) — `.hbr` container format and DATA_NODE requirements
+## Dataset recording & docs
+
+For dataset recording semantics and `.hbr` container format, see:
+
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — abstraction levels, mappings, data flows.
+- [PROJECT_STATE.md](docs/PROJECT_STATE.md) — package status.
+- [TELEOP_DATAS.md](docs/TELEOP_DATAS.md) — headset event and upload payload contract.
+- [HBR.md](docs/HBR.md) — `.hbr` container format and storage requirements.
+
+## Example robot config (Ainex)
+
+The first fully supported dual‑arm configuration is for the Ainex robot. The MoveIt and robot description package lives separately in:
+
+- [`ainex_moveit`](https://github.com/homebrewroboticsclub/ainex_moveit)
+
+Other robots can be integrated by providing a similar MoveIt + description package and wiring topics to match `teleop_fetch` expectations.

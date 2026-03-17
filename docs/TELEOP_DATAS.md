@@ -8,13 +8,14 @@ Implemented in `teleop_fetch`:
 
 ---
 
-# 1. JSON события записи в ROS (`/record_sessions`)
+## 1. ROS recording events (`/record_sessions`)
 
-Это сообщение, которое вы шлёте при старте и остановке записи.
+This is the message you send when starting and stopping a recording.
 
-## Формат `std_msgs/String`
+### `std_msgs/String` over rosbridge
 
-В rosbridge это уйдёт как:
+Over rosbridge it is published as:
+
 ```json
 {  
   "op": "publish",  
@@ -23,10 +24,9 @@ Implemented in `teleop_fetch`:
     "data": "{\"record_id\":\"7d7d3d7c4f1b4f2c8d5c2b0e0a123456\",\"event_type\":\"start\",\"app_session_id\":\"f1d2d2f924e986ac86fdf7b36c94bcdf\",\"timestamp_unix_ns\":1760700000123456789,\"timestamp_ros_unix_ns\":1760700000223456789,\"ntp_time_synchronized\":true,\"ros_time_synchronized\":true,\"pose_topic\":\"/quest/poses\",\"joint_topic\":\"/quest/joints\",\"send_hz\":10.0}"  
   }  
 }
-
 ```
 
-А полезная нагрузка внутри `msg.data` выглядит так:
+The JSON payload inside `msg.data` looks like:
 
 ```json
 {  
@@ -43,7 +43,7 @@ Implemented in `teleop_fetch`:
 }
 ```
 
-Для окончания записи будет то же самое, только:
+To stop recording the same structure is used, but with:
 
 ```json
 {  
@@ -53,11 +53,11 @@ Implemented in `teleop_fetch`:
 
 ---
 
-# 2. Большой JSON для REST `upload_dataset`
+## 2. Top-level JSON for REST `upload_dataset`
 
-Это итоговый payload, который собирает `DatasetManager`.
+This is the final payload assembled by the headset `DatasetManager`.
 
-## Верхний уровень
+### Top-level structure
 
 ```json
 {  
@@ -69,106 +69,106 @@ Implemented in `teleop_fetch`:
 
 ---
 
-# 3. Структура одного элемента `records[]`
+## 3. Structure of one `records[]` element
 
 ```json
 {  
   "recordId": "7d7d3d7c4f1b4f2c8d5c2b0e0a123456",  
-  "label": "Подъезд к точке A",  
-  "taskName": "Доехать до маркера у стены",  
+  "label": "Approach to point A",  
+  "taskName": "Drive to marker near wall",  
   "data": {}  
 }
 ```
 
-Где:
+Where:
 
-- `recordId` — уникальный id записи
-- `label` — подпись/метка из `RecordData.TextField`
-- `taskName` — имя выбранного задания
-- `data` — записанная телеметрическая сессия
+- `recordId` — unique id of the recording
+- `label` — short label from `RecordData.TextField`
+- `taskName` — human-readable task name
+- `data` — recorded telemetry session
 
 ---
 
-# 4. Структура `data` (`RecordedSession`)
+## 4. Structure of `data` (`RecordedSession`)
 
 ```json
 {  
   "recordId": "7d7d3d7c4f1b4f2c8d5c2b0e0a123456",  
-  
+
   "startedLocalUnixTimeNs": 1760700000000000000,  
   "endedLocalUnixTimeNs": 1760700005000000000,  
-  
+
   "startedEstimatedExternalUnixTimeNs": 1760700000100000000,  
   "endedEstimatedExternalUnixTimeNs": 1760700005100000000,  
-  
+
   "startedEstimatedRosUnixTimeNs": 1760700000200000000,  
   "endedEstimatedRosUnixTimeNs": 1760700005200000000,  
-  
+
   "rosTimeWasSynchronizedAtStart": true,  
   "rosTimeWasSynchronizedAtEnd": true,  
-  
+
   "ntpTimeWasSynchronizedAtStart": true,  
   "ntpTimeWasSynchronizedAtEnd": true,  
-  
+
   "sourceWsUrl": "ws://192.168.1.100:9090",  
   "sourceSendHz": 10.0,  
-  
+
   "frames": []  
 }
 ```
 
-### Значение полей
+### Field meanings
 
 - `startedLocalUnixTimeNs`, `endedLocalUnixTimeNs`  
-    локальное время устройства в ns
+  Local device time in ns.
 - `startedEstimatedExternalUnixTimeNs`, `endedEstimatedExternalUnixTimeNs`  
-    время, скорректированное по NTP
+  Time corrected using NTP.
 - `startedEstimatedRosUnixTimeNs`, `endedEstimatedRosUnixTimeNs`  
-    время, дополнительно скорректированное под ROS clock
+  Time additionally corrected to ROS clock.
 - `rosTimeWasSynchronizedAtStart/End`  
-    была ли активна синхронизация с ROS
+  Whether ROS time sync was active.
 - `ntpTimeWasSynchronizedAtStart/End`  
-    была ли активна синхронизация с NTP
+  Whether NTP time sync was active.
 - `sourceWsUrl`  
-    адрес rosbridge
+  rosbridge WebSocket URL.
 - `sourceSendHz`  
-    частота отправки данных
+  Data send frequency.
 - `frames`  
-    массив кадров телеметрии
+  Array of telemetry frames.
 
 ---
 
-# 5. Структура одного `frame` (`RecordedFrame`)
+## 5. Structure of one `frame` (`RecordedFrame`)
 
 ```json
 {  
   "localUnixTimeNs": 1760700000123456789,  
   "localMonotonicSec": 123.456789,  
-  
+
   "estimatedExternalUnixTimeNs": 1760700000223456789,  
   "estimatedRosUnixTimeNs": 1760700000323456789,  
-  
+
   "ntpTimeSynchronized": true,  
   "ntpClockOffsetSec": 0.102314,  
   "ntpSyncRttSec": 0.0184,  
-  
+
   "rosClockOffsetSec": 0.054211,  
   "syncRttSec": 0.0128,  
   "rosTimeSynchronized": true,  
-  
+
   "inputMode": "controllers",  
-  
+
   "head": {},  
   "left": {},  
   "right": {},  
-  
+
   "joints": []  
 }
 ```
 
 ---
 
-# 6. Структура позы (`RecordedPose`)
+## 6. Pose structure (`RecordedPose`)
 
 ```json
 {  
@@ -186,16 +186,15 @@ Implemented in `teleop_fetch`:
 }
 ```
 
-Это одинаково для:
+This structure is reused for:
 
 - `head`
 - `left`
 - `right`
-    
 
 ---
 
-# 7. Структура `joints`
+## 7. Joints array structure (`joints`)
 
 ```json
 [  
@@ -213,7 +212,8 @@ Implemented in `teleop_fetch`:
   { "name": "L_stick_touch", "value": 1.0 }  
 ]
 ```
-Если режим `hands`, то там будут, например:
+
+If the input mode is `hands`, for example:
 
 ```json
 [  
@@ -228,7 +228,7 @@ Implemented in `teleop_fetch`:
 
 ---
 
-# 8. Полный пример итогового payload
+## 8. Full example of the final payload
 
 ```json
 {  
@@ -237,8 +237,8 @@ Implemented in `teleop_fetch`:
   "records": [  
     {  
       "recordId": "7d7d3d7c4f1b4f2c8d5c2b0e0a123456",  
-      "label": "Подъезд к точке A",  
-      "taskName": "Доехать до маркера у стены",  
+      "label": "Approach to point A",  
+      "taskName": "Drive to marker near wall",  
       "data": {  
         "recordId": "7d7d3d7c4f1b4f2c8d5c2b0e0a123456",  
         "startedLocalUnixTimeNs": 1760700000000000000,  
@@ -302,7 +302,7 @@ Implemented in `teleop_fetch`:
 
 ---
 
-# 9. Формальная схема
+## 9. Formal JSON schema
 
 ```json
 {
@@ -553,3 +553,4 @@ Implemented in `teleop_fetch`:
   }
 }
 ```
+

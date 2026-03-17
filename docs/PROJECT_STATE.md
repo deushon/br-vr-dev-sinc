@@ -1,131 +1,132 @@
-# Состояние проекта — VR Teleop Ainex
+# Project State — VR Teleop Ainex
 
-**Версия:** beta 1.0  
-**Дата:** 2025-03-15
+**Version:** beta 1.0  
+**Date:** 2025-03-15
 
-## Обзор
+## Overview
 
-Единая VR-телеманипуляция для робота Ainex: голова, руки, грипперы, X/Y start/stop. Один издатель в bus_servo.
+Unified VR teleoperation for the Ainex robot: head, arms, grippers, X/Y start/stop. A single publisher to `bus_servo`.
 
 ---
 
-## Пакеты и их состояние
+## Packages and their status
 
-### teleop_fetch (основной пакет телопа)
+### teleop_fetch (main teleop package)
 
-| Компонент | Описание | Статус |
-|-----------|----------|--------|
-| `teleop_node.py` | Главный узел: head, arms, start/stop | ✅ |
-| `vr_remapper_node.py` | Маппинг осей, R_A калибровка, scale | ✅ beta 1.0 |
-| `pose_source_node.py` | VR (remapped) + manual → /teleop_fetch/poses | ✅ |
-| `head_controller.py` | Pan/tilt по ориентации головы | ✅ |
-| `start_stop_controller.py` | X=включить руки, Y=выключить | ✅ |
-| `dataset_recorder_node.py` | `/record_sessions` start/stop, robot-side capture, `.hbr` finalize | ✅ beta 1.1 |
-| `dataset_upload_server.py` | `POST /upload_dataset` on port 9191 | ✅ beta 1.1 |
-| `episode_recorder.py` | Session manager + HBR writer integration | ✅ beta 1.1 |
-| `sensors/base_*.py`, `sensors/ros_*.py` | Typed sensor abstractions (camera/IMU/joints) | ✅ beta 1.1 |
-| `config/teleop.yaml` | servo IDs, arm start, head | ✅ |
-| `config/vr_remapper.yaml` | reference_pose, scale | ✅ |
-| `config/dataset_recorder.yaml` | dataset topics, storage paths, upload API | ✅ beta 1.1 |
-| `web/teleop_debug.html` | 3D визуализация, scale, manual drag | ✅ |
+| Component                       | Description                                                    | Status       |
+|---------------------------------|----------------------------------------------------------------|--------------|
+| `teleop_node.py`               | Main node: head, arms, start/stop                             | ✅            |
+| `vr_remapper_node.py`          | Axis mapping, R_A calibration, scale                          | ✅ beta 1.0  |
+| `pose_source_node.py`          | VR (remapped) + manual → `/teleop_fetch/poses`                | ✅            |
+| `head_controller.py`           | Pan/tilt from head orientation                                | ✅            |
+| `start_stop_controller.py`     | X = enable arms, Y = disable                                  | ✅            |
+| `dataset_recorder_node.py`     | `/record_sessions` start/stop, robot-side capture, `.hbr` finalize | ✅ beta 1.1 |
+| `dataset_upload_server.py`     | `POST /upload_dataset` on port 9191                           | ✅ beta 1.1  |
+| `episode_recorder.py`          | Session manager + HBR writer integration                      | ✅ beta 1.1  |
+| `sensors/base_*.py`, `sensors/ros_*.py` | Typed sensor abstractions (camera/IMU/joints)        | ✅ beta 1.1  |
+| `config/teleop.yaml`           | Servo IDs, arm start, head                                    | ✅            |
+| `config/vr_remapper.yaml`      | Reference pose, scale                                         | ✅            |
+| `config/dataset_recorder.yaml` | Dataset topics, storage paths, upload API                     | ✅ beta 1.1  |
+| `web/teleop_debug.html`        | 3D visualization, scale, manual drag                         | ✅            |
 
-**Запуск:** `roslaunch teleop_fetch teleop.launch`
+**Launch:** `roslaunch teleop_fetch teleop.launch`
 
 ---
 
 ### my_package (fast_ik_node)
 
-| Компонент | Описание | Статус |
-|-----------|----------|--------|
-| `fast_ik_node.cpp` | IK обеих рук, gripper, joint→servo conversion | ✅ |
-| `config/fast_ik.yaml` | gripper, move_groups, left_hand | ✅ |
-| Публикует | `/teleop_fetch/arm_servo_targets` | ✅ |
-| Публикует | `/teleop_fetch/debug_target_poses` | ✅ |
+| Component             | Description                                      | Status |
+|-----------------------|--------------------------------------------------|--------|
+| `fast_ik_node.cpp`   | IK for both arms, gripper, joint→servo mapping   | ✅      |
+| `config/fast_ik.yaml`| Gripper, MoveIt groups, left_hand config         | ✅      |
+| Publishes             | `/teleop_fetch/arm_servo_targets`               | ✅      |
+| Publishes             | `/teleop_fetch/debug_target_poses`              | ✅      |
 
-**Примечание:** Маппинг, калибровка, scale — в vr_remapper. fast_ik получает готовые координаты в body_link.
+**Note:** Axis mapping, calibration and scale live in `vr_remapper`. `fast_ik` receives poses in `body_link`.
 
 ---
 
 ### robot
 
-| Компонент | Описание | Статус |
-|-----------|----------|--------|
-| planning_context, move_group, SRDF | MoveIt, kinematics | ✅ |
-| robot_description | URDF, ainex_description | ✅ |
+| Component                         | Description              | Status |
+|-----------------------------------|--------------------------|--------|
+| `planning_context`, `move_group`, `SRDF` | MoveIt, kinematics | ✅      |
+| `robot_description`              | URDF, `ainex_description` | ✅    |
 
 ---
 
 ### ainex_interfaces
 
-| Компонент | Описание | Статус |
-|-----------|----------|--------|
-| HeadState | Сообщение для головы | ✅ |
-| HeadCommand | Совместим с HeadState | ✅ |
+| Component  | Description                     | Status |
+|-----------|---------------------------------|--------|
+| HeadState | Message type for the head       | ✅      |
+| HeadCommand | Compatible with HeadState    | ✅      |
 
 ---
 
 ### ros_robot_controller
 
-| Компонент | Описание | Статус |
-|-----------|----------|--------|
-| SetBusServosPosition | Команды сервоприводам | ✅ |
-| bus_servo/set_position | Топик | ✅ |
+| Component            | Description                   | Status |
+|----------------------|-------------------------------|--------|
+| SetBusServosPosition | Bus servo command message     | ✅      |
+| bus_servo/set_position | Topic for servo positions  | ✅      |
 
 ---
 
-## Архитектура данных
+## Data architecture
 
-См. [ARCHITECTURE.md](ARCHITECTURE.md) — уровни абстракции, потоки, схема.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for abstraction levels, flows, and diagrams.
 
-Кратко: `/quest/poses` → vr_remapper (map + R_A calib + scale) → pose_source → fast_ik (IK) → teleop_fetch → bus_servo.
+Short version:  
+`/quest/poses` → `vr_remapper` (map + R_A calibration + scale) → `pose_source` → `fast_ik` (IK) → `teleop_fetch` → `bus_servo`.
 
-Dataset branch: `/record_sessions` + robot sensors + `/upload_dataset` → dataset recorder → `.hbr`.
-
----
-
-## Конфигурация
-
-| Файл | Ключевые параметры |
-|------|--------------------|
-| `config/teleop.yaml` | servo_ids, arm_start_positions, head, VR topics |
-| `config/vr_remapper.yaml` | reference_pose (left/right), scale |
-| `config/fast_ik.yaml` (my_package) | gripper, move_groups, left_hand |
+Dataset branch:  
+`/record_sessions` + robot sensors + `/upload_dataset` → dataset recorder → `.hbr`.
 
 ---
 
-## Калибровка (beta 1.0)
+## Configuration
 
-**R_A на правом джойстике:** Оператор приводит руки в естественное положение (перед собой, слегка внизу). vr_remapper вычисляет offset = reference_pose - mapped_vr. Эталонная поза робота — в `vr_remapper.yaml`.
-
-**SCALE:** Чувствительность 0.0001..100, топик `/teleop_fetch/scale`, обновляется из UI на лету.
+| File                       | Key parameters                              |
+|----------------------------|---------------------------------------------|
+| `config/teleop.yaml`      | `servo_ids`, `arm_start_positions`, head, VR topics |
+| `config/vr_remapper.yaml` | Reference pose (left/right), scale          |
+| `config/fast_ik.yaml` (my_package) | Gripper, MoveIt groups, left_hand  |
 
 ---
 
-## Отладка
+## Calibration (beta 1.0)
+
+- **R_A on right joystick:** Operator moves arms into a natural pose (in front, slightly down). `vr_remapper` computes `offset = reference_pose - mapped_vr`. The reference robot pose is defined in `vr_remapper.yaml`.
+- **SCALE:** Sensitivity 0.0001..100, topic `/teleop_fetch/scale`, updated live from the UI.
+
+---
+
+## Debugging
 
 - **RViz:** `roslaunch teleop_fetch teleop_debug.launch`
 - **Web viz:** rosbridge + `teleop_debug.html`
-- **Топики:** `/teleop_fetch/debug_target_poses`, `/teleop_fetch/teleop_state`, `/visualization_marker`
+- **Topics:** `/teleop_fetch/debug_target_poses`, `/teleop_fetch/teleop_state`, `/visualization_marker`
 
 ---
 
-## Топик /teleop_fetch/teleop_state
+## Topic `/teleop_fetch/teleop_state`
 
-**Тип:** `ainex_interfaces/TeleopState`
+**Type:** `ainex_interfaces/TeleopState`
 
-Публикуется fast_ik_node при каждом обновлении poses. Содержит состояние IK и ошибки.
+Published by `fast_ik_node` on each pose update. Contains IK status and errors.
 
-| Поле | Тип | Описание |
-|------|-----|----------|
-| header | std_msgs/Header | stamp, frame_id |
-| left_arm_ok | bool | IK успешен для левой руки |
-| right_arm_ok | bool | IK успешен для правой руки |
-| left_arm_out_of_bounds | bool | Цель вне досягаемости; рука следует в ближайшей точке (clamp_to_workspace) |
-| right_arm_out_of_bounds | bool | Аналогично для правой руки |
-| errors | string[] | Текстовые сообщения: "Left arm IK failed", "Right arm IK failed" при неудаче |
+| Field                    | Type            | Description                                                                  |
+|--------------------------|-----------------|------------------------------------------------------------------------------|
+| header                   | std_msgs/Header | stamp, frame_id                                                              |
+| left_arm_ok              | bool            | IK succeeded for the left arm                                               |
+| right_arm_ok             | bool            | IK succeeded for the right arm                                              |
+| left_arm_out_of_bounds   | bool            | Target out of reach; arm follows closest point (clamp_to_workspace)        |
+| right_arm_out_of_bounds  | bool            | Same for right arm                                                          |
+| errors                   | string[]        | Text messages: `"Left arm IK failed"`, `"Right arm IK failed"` on failures  |
 
 ---
 
-## Известные проблемы
+## Known issues
 
-См. [TODO.md](TODO.md).
+See [TODO.md](TODO.md).

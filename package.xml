@@ -2,7 +2,7 @@
 <package format="2">
   <name>teleop_fetch</name>
   <version>0.0.0</version>
-  <description>VR teleoperation for Ainex robot - unified head, arms, grippers, start/stop</description>
+  <description>VR teleoperation for dual-arm robots on ROS1 Noetic (originally for Fetch; first full config for Ainex robot)</description>
   <license>BSD</license>
   <maintainer email="ainex@todo.todo">ainex</maintainer>
 
