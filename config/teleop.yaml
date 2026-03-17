@@ -26,9 +26,9 @@ gripper:
   left: { closed: 500, open: 100 }
   right: { closed: 400, open: 800 }
 
-# Arm start positions (T-pose: руки в стороны, Y = стоп)
-# Должны соответствовать T-позе: left (0, 0.25, 0.087), right (0, -0.25, 0.087) в body_link.
-# Для пересчёта: rosrun my_package t_pose_arm_start.py (после roslaunch robot demo.launch)
+# Arm start positions (T-pose: arms sideways, Y = stop)
+# Must match T-pose: left (0, 0.25, 0.087), right (0, -0.25, 0.087) in body_link.
+# To recalc: rosrun my_package t_pose_arm_start.py (after roslaunch robot demo.launch)
 # Keys must be strings - rosparam rejects integer keys in nested dicts
 arm_start_positions:
   left:

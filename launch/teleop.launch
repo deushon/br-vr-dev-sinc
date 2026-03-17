@@ -6,6 +6,7 @@
   <arg name="use_gui" default="false" />
   <arg name="pipeline" default="ompl" />
   <arg name="fake_execution_type" default="interpolate" />
+  <arg name="enable_dataset_recording" default="true" />
 
   <!-- robot_description, SRDF, kinematics -->
   <include file="$(find robot)/launch/planning_context.launch">
@@ -38,7 +39,7 @@
     <arg name="rviz_config" value="$(find robot)/launch/moveit.rviz"/>
   </include>
 
-  <!-- VR remapper: маппинг + R_A калибровка + scale -->
+  <!-- VR remapper: axis mapping + R_A calibration + scale -->
   <node name="vr_remapper" pkg="teleop_fetch" type="vr_remapper_node.py" output="screen">
     <rosparam command="load" file="$(find teleop_fetch)/config/vr_remapper.yaml"/>
   </node>
@@ -56,7 +57,17 @@
     <rosparam command="load" file="$(find teleop_fetch)/config/teleop.yaml"/>
   </node>
 
-  <!-- Calibration_node (legacy T-pose): калибровка R_A теперь в vr_remapper -->
+  <!-- Dataset recorder: /record_sessions start|stop -> .hbr -->
+  <node name="dataset_recorder" pkg="teleop_fetch" type="dataset_recorder_node.py" output="screen" if="$(arg enable_dataset_recording)">
+    <rosparam command="load" file="$(find teleop_fetch)/config/dataset_recorder.yaml"/>
+  </node>
+
+  <!-- Upload API: POST :9191/upload_dataset -->
+  <node name="dataset_upload_server" pkg="teleop_fetch" type="dataset_upload_server.py" output="screen" if="$(arg enable_dataset_recording)">
+    <rosparam command="load" file="$(find teleop_fetch)/config/dataset_recorder.yaml"/>
+  </node>
+
+  <!-- Calibration_node (legacy T-pose): R_A calibration now in vr_remapper -->
   <node name="teleop_calibration" pkg="teleop_fetch" type="calibration_node.py" output="screen">
     <param name="robot_arm_span" value="0.4"/>
   </node>

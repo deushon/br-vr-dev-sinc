@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Pose source: merges VR и Manual.
-- Manual: /teleop_fetch/manual_poses (body_link, без изменений)
-- VR: /teleop_fetch/quest_poses_remapped (уже ремаплены vr_remapper из /quest/poses)
+Pose source: merges VR and Manual.
+- Manual: /teleop_fetch/manual_poses (body_link, unchanged)
+- VR: /teleop_fetch/quest_poses_remapped (already remapped by vr_remapper from /quest/poses)
 Publishes to /teleop_fetch/poses for fast_ik.
 """
 
@@ -15,7 +15,7 @@ class PoseSourceNode:
     def __init__(self):
         rospy.init_node('pose_source', anonymous=False)
         self.mode = 'vr'
-        self.quest_poses_remapped = None  # от vr_remapper (ремап только контроллеров)
+        self.quest_poses_remapped = None  # from vr_remapper (controller remap only)
         self.manual_poses = None
 
         self.pub = rospy.Publisher('/teleop_fetch/poses', PoseArray, queue_size=1)
@@ -37,9 +37,9 @@ class PoseSourceNode:
 
     def _publish(self, event):
         if self.mode == 'manual' and self.manual_poses and len(self.manual_poses.poses) >= 3:
-            self.pub.publish(self.manual_poses)  # body_link как есть
+            self.pub.publish(self.manual_poses)  # body_link as-is
         elif self.quest_poses_remapped and len(self.quest_poses_remapped.poses) >= 3:
-            self.pub.publish(self.quest_poses_remapped)  # уже ремаплены vr_remapper
+            self.pub.publish(self.quest_poses_remapped)  # already remapped by vr_remapper
 
 
 def main():

@@ -44,3 +44,13 @@
 - [ ] Калибровка зоны управления (руки)
 - [ ] Полноценное тестирование левой руки с разными conversion_preset
 - [ ] Проверка и фиксация корректного axis_mapping для HTML
+- [x] End-to-end dataset recording (`/record_sessions` -> `.hbr`)
+- [x] Upload API (`POST /upload_dataset` on `:9191`)
+
+---
+
+## Dataset recording follow-ups
+
+- [x] Push to DATA_NODE via `POST /sessions/upload` (multipart, per ROBOT_SERVICE_INTEGRATION.md)
+- [ ] Optional video transcoding pipeline (`cam_main_frames.jsonl` -> `cam_main.mp4` real stream)
+- [ ] Add automated integration tests for recorder/upload API

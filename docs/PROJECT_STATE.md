@@ -20,8 +20,13 @@
 | `pose_source_node.py` | VR (remapped) + manual → /teleop_fetch/poses | ✅ |
 | `head_controller.py` | Pan/tilt по ориентации головы | ✅ |
 | `start_stop_controller.py` | X=включить руки, Y=выключить | ✅ |
+| `dataset_recorder_node.py` | `/record_sessions` start/stop, robot-side capture, `.hbr` finalize | ✅ beta 1.1 |
+| `dataset_upload_server.py` | `POST /upload_dataset` on port 9191 | ✅ beta 1.1 |
+| `episode_recorder.py` | Session manager + HBR writer integration | ✅ beta 1.1 |
+| `sensors/base_*.py`, `sensors/ros_*.py` | Typed sensor abstractions (camera/IMU/joints) | ✅ beta 1.1 |
 | `config/teleop.yaml` | servo IDs, arm start, head | ✅ |
 | `config/vr_remapper.yaml` | reference_pose, scale | ✅ |
+| `config/dataset_recorder.yaml` | dataset topics, storage paths, upload API | ✅ beta 1.1 |
 | `web/teleop_debug.html` | 3D визуализация, scale, manual drag | ✅ |
 
 **Запуск:** `roslaunch teleop_fetch teleop.launch`
@@ -73,6 +78,8 @@
 См. [ARCHITECTURE.md](ARCHITECTURE.md) — уровни абстракции, потоки, схема.
 
 Кратко: `/quest/poses` → vr_remapper (map + R_A calib + scale) → pose_source → fast_ik (IK) → teleop_fetch → bus_servo.
+
+Dataset branch: `/record_sessions` + robot sensors + `/upload_dataset` → dataset recorder → `.hbr`.
 
 ---
 

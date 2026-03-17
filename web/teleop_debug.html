@@ -31,6 +31,16 @@
     .coords { font-size: 0.75rem; font-family: monospace; color: #8b949e; }
     .mode-row { display: flex; gap: 8px; margin-bottom: 8px; }
     .mode-row button { flex: 1; }
+    .grid-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat { border: 1px solid #30363d; border-radius: 6px; padding: 8px; background: #0d1117; }
+    .stat .k { color: #8b949e; font-size: 0.72rem; }
+    .stat .v { font-size: 1rem; font-weight: 700; margin-top: 2px; }
+    .table-wrap { max-height: 220px; overflow: auto; border: 1px solid #30363d; border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+    th, td { border-bottom: 1px solid #21262d; padding: 6px; text-align: left; }
+    .ok { color: #3fb950; font-weight: 700; }
+    .bad { color: #f85149; font-weight: 700; }
+    .log-box { width: 100%; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 8px; border-radius: 6px; font-size: 0.72rem; min-height: 180px; }
   </style>
 </head>
 <body>
@@ -45,6 +55,47 @@
         <input type="text" id="ws-url" value="ws://192.168.20.21:9090" placeholder="ws://host:9090">
         <button id="btn-connect">Connect</button>
         <div id="status" class="status disconnected">Disconnected</div>
+        <button id="btn-open-dataset-dashboard" class="secondary">Open dataset dashboard (full screen)</button>
+      </div>
+      <div class="panel" style="display:none; border: 1px solid #1f6feb;">
+        <h3>Dataset dashboard (robot)</h3>
+        <label>Dataset API base URL</label>
+        <input type="text" id="dataset-api-base" value="http://192.168.20.21:9191" placeholder="http://robot-ip:9191">
+        <label>DATA_NODE upload URL</label>
+        <input type="text" id="data-node-url" value="http://192.168.20.166:8088" placeholder="http://data-node-ip:8088">
+        <label>DATA_NODE upload path</label>
+        <input type="text" id="data-node-upload-path" value="/sessions/upload" placeholder="/sessions/upload">
+        <div class="mode-row">
+          <button id="btn-dataset-refresh" class="secondary">Refresh status</button>
+          <button id="btn-dataset-logs" class="secondary">Refresh logs</button>
+        </div>
+        <div class="grid-stats">
+          <div class="stat"><div class="k">Total datasets</div><div id="ds-total" class="v">0</div></div>
+          <div class="stat"><div class="k">Active dataset</div><div id="ds-active" class="v">-</div></div>
+          <div class="stat"><div class="k">Robot-ready</div><div id="ds-robot-ready" class="v">0</div></div>
+          <div class="stat"><div class="k">Operator-ready</div><div id="ds-operator-ready" class="v">0</div></div>
+        </div>
+        <div class="coords" id="ds-refresh-status" style="margin:8px 0;">Status: idle</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Dataset ID</th>
+                <th>Task</th>
+                <th>Label</th>
+                <th>Robot</th>
+                <th>Operator</th>
+                <th>State</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="dataset-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel" style="display:none;">
+        <h3>Dataset logs (robot)</h3>
+        <textarea id="dataset-logs" class="log-box" readonly></textarea>
       </div>
       <div class="panel">
         <h3>Pose source</h3>
@@ -55,25 +106,25 @@
         <div class="coords" id="mode-status">VR: poses from /quest/poses</div>
       </div>
       <div class="panel" id="xy-panel" style="display:none">
-        <h3>Start/Stop (эмуляция X/Y)</h3>
+        <h3>Start/Stop (X/Y emulation)</h3>
         <div class="mode-row">
-          <button id="btn-x" class="secondary" title="X = включить управление руками">X Start</button>
-          <button id="btn-y" class="secondary" title="Y = выключить, руки в стартовую позу">Y Stop</button>
+          <button id="btn-x" class="secondary" title="X = enable arm control">X Start</button>
+          <button id="btn-y" class="secondary" title="Y = disable, arms to start pose">Y Stop</button>
         </div>
-        <div class="coords" id="xy-status">Нажмите X для включения</div>
+        <div class="coords" id="xy-status">Press X to enable</div>
       </div>
       <div class="panel" style="border: 2px solid #238636;">
-        <h3>Калибровка + Scale</h3>
-        <div class="coords" style="font-size:0.7rem; color:#8b949e; margin-bottom:6px;">Приведите руки в естественное положение (перед собой, слегка внизу), нажмите R_A на правом джойстике.</div>
-        <label><strong>SCALE</strong> (чувствительность 0.0001..100, обновляется на лету)</label>
+        <h3>Calibration + Scale</h3>
+        <div class="coords" style="font-size:0.7rem; color:#8b949e; margin-bottom:6px;">Bring hands to natural position (in front, slightly lower), press R_A on right joystick.</div>
+        <label><strong>SCALE</strong> (sensitivity 0.0001..100, live update)</label>
         <input type="number" id="scale" value="0.25" min="0.0001" max="100" step="0.01">
       </div>
       <div class="panel">
-        <h3>Ремаппинг контроллеров (только VR)</h3>
-        <label>Quest → body_link, применяется только к данным джойстиков (manual не затрагивается)</label>
+        <h3>Controller remapping (VR only)</h3>
+        <label>Quest → body_link, applies only to joystick data (manual unaffected)</label>
         <select id="axis-mapping-robot">
-          <option value="xy" selected>xy (x=-y, y=-x, z=z) — рабочий</option>
-          <option value="none">none (без ремапинга)</option>
+          <option value="xy" selected>xy (x=-y, y=-x, z=z) — working</option>
+          <option value="none">none (no remap)</option>
           <option value="xz">xz</option>
           <option value="yz">yz</option>
           <option value="swap_yz">swap Y↔Z</option>
@@ -82,24 +133,24 @@
           <option value="inv_z">inv_z (z=-z)</option>
           <option value="inv_yz">inv_yz (y=-y, z=-z)</option>
         </select>
-        <div class="coords" style="margin-top:8px; font-size:0.75rem; color:#8b949e;">Swap Y↔Z=OFF: xy уже с swap (-y,z,-x). ON: старый xy (-y,-x,z)</div>
-        <label><input type="checkbox" id="post-swap-yz"> Swap Y↔Z (вернуть старый маппинг)</label>
-        <label><input type="checkbox" id="post-inv-y"> Инвертировать Y</label>
-        <label><input type="checkbox" id="post-inv-z"> Инвертировать Z</label>
-        <label><input type="checkbox" id="post-swap-right-only" title="Swap только для правой руки (если асимметрия)"> Swap только для правой</label>
+        <div class="coords" style="margin-top:8px; font-size:0.75rem; color:#8b949e;">Swap Y↔Z=OFF: xy with swap (-y,z,-x). ON: legacy xy (-y,-x,z)</div>
+        <label><input type="checkbox" id="post-swap-yz"> Swap Y↔Z (restore legacy mapping)</label>
+        <label><input type="checkbox" id="post-inv-y"> Invert Y</label>
+        <label><input type="checkbox" id="post-inv-z"> Invert Z</label>
+        <label><input type="checkbox" id="post-swap-right-only" title="Swap right hand only (if asymmetric)"> Swap right only</label>
       </div>
       <div class="panel">
         <h3>Display axes</h3>
-        <label>body_link → Three.js (визуализация)</label>
+        <label>body_link → Three.js (visualization)</label>
         <select id="axis-map">
-          <option value="ros_xyz" selected>Робот стоит: X вперёд, Y влево, Z вверх</option>
-          <option value="identity">Identity (может лежать на боку)</option>
+          <option value="ros_xyz" selected>Robot: X forward, Y left, Z up</option>
+          <option value="identity">Identity (may lie on side)</option>
           <option value="ros_zup">ROS Z-up → Y-up</option>
           <option value="ros_swap">Swap Y↔Z</option>
         </select>
       </div>
       <div class="panel">
-        <h3>Robot Scale (детали)</h3>
+        <h3>Robot Scale (details)</h3>
         <label>neck_offset</label>
         <input type="number" id="neck-offset" value="0.25" step="0.01">
         <label>big_head_x_offset</label>
@@ -116,33 +167,33 @@
       </div>
       <div class="panel">
         <h3>Robot target (body_link)</h3>
-        <div class="coords" style="margin-bottom:2px; color:#6e7681;">body_link: X вперёд, Y влево, Z вверх</div>
+        <div class="coords" style="margin-bottom:2px; color:#6e7681;">body_link: X forward, Y left, Z up</div>
         <div class="coords" id="tgt-left">Left: X=— Y=— Z=—</div>
         <div class="coords" id="tgt-right">Right: X=— Y=— Z=—</div>
       </div>
       <div class="panel">
-        <h3>Зоны досягаемости</h3>
-        <label><input type="checkbox" id="show-workspace"> Показать зоны досягаемости (max_reach 0.25 м)</label>
+        <h3>Workspace zones</h3>
+        <label><input type="checkbox" id="show-workspace"> Show workspace zones (max_reach 0.25 m)</label>
       </div>
       <div class="panel">
         <h3>Legend</h3>
         <div class="coords">Red = operator left hand (VR)</div>
         <div class="coords">Blue = operator right hand (VR)</div>
-        <div class="coords"><strong>Cyan = левая рука, Orange = правая — перетаскивайте в Manual</strong></div>
+        <div class="coords"><strong>Cyan = left arm, Orange = right — drag in Manual</strong></div>
         <div class="coords">Gray lines = shoulder → target</div>
       </div>
       <div class="panel">
-        <h3>Экспорт настроек</h3>
-        <button id="btn-export">Скопировать настройки</button>
+        <h3>Export settings</h3>
+        <button id="btn-export">Copy settings</button>
         <textarea id="export-output" readonly rows="12" style="width:100%; margin-top:8px; font-size:0.75rem; background:#0d1117; border:1px solid #30363d; color:#c9d1d9; padding:8px;"></textarea>
       </div>
     </aside>
     <main>
-      <div id="manual-hint" class="manual-hint" style="display:none">ЛКМ — перетаскивать сферы. ПКМ — вращать вид.</div>
-      <div id="robot-orient" class="robot-orient">body_link: X вперёд | Y влево | Z вверх. Оси: Red=X, Green=Y, Blue=Z</div>
-      <div id="axis-legend" class="robot-orient" style="bottom:auto; top:60px; left:12px;">body_link: X вперёд/назад, Y влево/вправо, Z вверх/вниз. В сцене: Green=Z(верх)</div>
-      <div id="label-left" class="sphere-label">Л</div>
-      <div id="label-right" class="sphere-label">П</div>
+      <div id="manual-hint" class="manual-hint" style="display:none">LMB — drag spheres. RMB — rotate view.</div>
+      <div id="robot-orient" class="robot-orient">body_link: X forward | Y left | Z up. Axes: Red=X, Green=Y, Blue=Z</div>
+      <div id="axis-legend" class="robot-orient" style="bottom:auto; top:60px; left:12px;">body_link: X fwd/back, Y left/right, Z up/down. In scene: Green=Z(up)</div>
+      <div id="label-left" class="sphere-label">L</div>
+      <div id="label-right" class="sphere-label">R</div>
       <div id="canvas-container"></div>
     </main>
   </div>
@@ -175,7 +226,7 @@
     // body_link frame: left shoulder ~(0, 0.0525, 0.087), right ~(0, -0.0525, 0.087)
     const L_SHOULDER = { x: 0, y: 0.0525, z: 0.087 };
     const R_SHOULDER = { x: 0, y: -0.0525, z: 0.087 };
-    // T-pose: руки вытянуты в стороны (robot_arm_length ~0.2)
+    // T-pose: arms extended sideways (robot_arm_length ~0.2)
     const T_POSE_LEFT = { x: 0, y: 0.0525 + 0.2, z: 0.087 };
     const T_POSE_RIGHT = { x: 0, y: -0.0525 - 0.2, z: 0.087 };
 
@@ -225,7 +276,7 @@
       lblZ.position.set(0, 0, 0.2);
       scene.add(lblZ);
 
-      // Robot orientation schematic (body_link: face +X, left +Y, up +Z) — не перекрывает руки
+      // Robot orientation schematic (body_link: face +X, left +Y, up +Z) — does not overlap arms
       robotSchematic = new THREE.Group();
       const bodyGeo = new THREE.BoxGeometry(0.04, 0.05, 0.03);
       const bodyMat = new THREE.MeshBasicMaterial({ color: 0x666666 });
@@ -264,8 +315,8 @@
       const geoTgt = new THREE.SphereGeometry(0.03, 16, 16);  // larger for easier drag
       opLeftMesh = new THREE.Mesh(geoOp, new THREE.MeshBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.7 }));
       opRightMesh = new THREE.Mesh(geoOp, new THREE.MeshBasicMaterial({ color: 0x4444ff, transparent: true, opacity: 0.7 }));
-      tgtLeftMesh = new THREE.Mesh(geoTgt, new THREE.MeshBasicMaterial({ color: 0x00ccff }));   // cyan = левая
-      tgtRightMesh = new THREE.Mesh(geoTgt, new THREE.MeshBasicMaterial({ color: 0xff9900 }));  // orange = правая
+      tgtLeftMesh = new THREE.Mesh(geoTgt, new THREE.MeshBasicMaterial({ color: 0x00ccff }));   // cyan = left
+      tgtRightMesh = new THREE.Mesh(geoTgt, new THREE.MeshBasicMaterial({ color: 0xff9900 }));  // orange = right
       tgtLeftMesh.userData = { hand: 'left' };
       tgtRightMesh.userData = { hand: 'right' };
       scene.add(tgtLeftMesh); scene.add(tgtRightMesh);
@@ -464,13 +515,18 @@
 
     function scalePose(x, y, z, isLeft) {
       const scale = parseFloat(document.getElementById('scale')?.value || 0.25);
-      const [bx, by, bz] = [z, -x, y];  // map как в vr_remapper
+      const [bx, by, bz] = [z, -x, y];  // map as in vr_remapper
       const body = { x: bx * scale, y: by * scale, z: bz * scale };
       return bodyLinkToThree(body.x, body.y, body.z);
     }
 
     function connect() {
       const url = document.getElementById('ws-url').value;
+      const inferredApi = inferDatasetApiBase(url);
+      const apiEl = document.getElementById('dataset-api-base');
+      if (apiEl && (!apiEl.value || apiEl.value.includes('192.168.20.21'))) {
+        apiEl.value = inferredApi;
+      }
       if (ros) ros.close();
       ros = new ROSLIB.Ros({ url });
       ros.on('connection', () => {
@@ -486,6 +542,129 @@
         document.getElementById('status').textContent = 'Disconnected';
         document.getElementById('status').className = 'status disconnected';
       });
+    }
+
+    function inferDatasetApiBase(wsUrl) {
+      try {
+        const u = new URL(wsUrl);
+        return `http://${u.hostname}:9191`;
+      } catch (_) {
+        return 'http://192.168.20.21:9191';
+      }
+    }
+
+    async function refreshDatasetStatus() {
+      const base = (document.getElementById('dataset-api-base')?.value || '').replace(/\/+$/, '');
+      const statusEl = document.getElementById('ds-refresh-status');
+      statusEl.textContent = 'Status: loading dataset status...';
+      try {
+        const resp = await fetch(`${base}/dataset_status`);
+        const data = await resp.json();
+        if (!resp.ok || data.status !== 'ok') {
+          throw new Error(data.message || `HTTP ${resp.status}`);
+        }
+        const summary = data.summary || {};
+        document.getElementById('ds-total').textContent = String(summary.totalDatasets ?? 0);
+        document.getElementById('ds-active').textContent = summary.activeDatasetId || '-';
+        document.getElementById('ds-robot-ready').textContent = String(summary.robotReadyCount ?? 0);
+        document.getElementById('ds-operator-ready').textContent = String(summary.operatorReadyCount ?? 0);
+        const tbody = document.getElementById('dataset-table-body');
+        tbody.innerHTML = '';
+        for (const ds of (data.datasets || [])) {
+          const tr = document.createElement('tr');
+          const shortId = (ds.datasetId || '').length > 14 ? `${(ds.datasetId || '').slice(0, 14)}...` : (ds.datasetId || '');
+          const state = ds.stuck ? 'STUCK' : (ds.uploadOnly ? 'UPLOAD_ONLY' : 'OK');
+          tr.innerHTML = `
+            <td title="${ds.datasetId || ''}">${shortId}</td>
+            <td>${ds.taskName || ''}</td>
+            <td>${ds.label || ''}</td>
+            <td class="${ds.robotReady ? 'ok' : 'bad'}">${ds.robotReady ? 'READY' : 'NO'}</td>
+            <td class="${ds.operatorReady ? 'ok' : 'bad'}">${ds.operatorReady ? 'READY' : 'NO'}</td>
+            <td class="${ds.stuck ? 'bad' : 'ok'}">${state}</td>
+            <td>
+              <button class="secondary" data-act="download" data-id="${ds.datasetId || ''}">Download</button>
+              <button class="secondary" data-act="push" data-id="${ds.datasetId || ''}">Push</button>
+              <button class="secondary" data-act="delete" data-id="${ds.datasetId || ''}">Delete</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        }
+        tbody.querySelectorAll('button[data-act]').forEach((btn) => {
+          btn.addEventListener('click', async (ev) => {
+            const act = ev.currentTarget.getAttribute('data-act');
+            const id = ev.currentTarget.getAttribute('data-id');
+            if (!id) return;
+            if (act === 'download') return downloadDataset(id);
+            if (act === 'push') return pushDataset(id);
+            if (act === 'delete') return deleteDataset(id);
+          });
+        });
+        statusEl.textContent = `Status: loaded ${data.datasets?.length || 0} datasets`;
+      } catch (e) {
+        statusEl.textContent = `Status: failed to load (${e.message || e})`;
+      }
+    }
+
+    async function deleteDataset(datasetId) {
+      if (!confirm(`Delete dataset ${datasetId}? This cannot be undone.`)) return;
+      const base = (document.getElementById('dataset-api-base')?.value || '').replace(/\/+$/, '');
+      const resp = await fetch(`${base}/dataset_delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datasetId })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.status !== 'ok') {
+        alert(`Delete failed: ${data.message || resp.status}`);
+        return;
+      }
+      await refreshDatasetStatus();
+      await refreshDatasetLogs();
+    }
+
+    function downloadDataset(datasetId) {
+      const base = (document.getElementById('dataset-api-base')?.value || '').replace(/\/+$/, '');
+      window.open(`${base}/dataset_download/${encodeURIComponent(datasetId)}`, '_blank');
+    }
+
+    async function pushDataset(datasetId) {
+      const base = (document.getElementById('dataset-api-base')?.value || '').replace(/\/+$/, '');
+      const dataNodeUrl = document.getElementById('data-node-url')?.value || '';
+      const uploadPath = document.getElementById('data-node-upload-path')?.value || '/sessions/upload';
+      const resp = await fetch(`${base}/dataset_push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datasetId, dataNodeUrl, uploadPath })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.status !== 'ok') {
+        alert(`Push failed: ${data.message || resp.status}`);
+      } else {
+        alert(`Push queued/sent for ${datasetId}`);
+      }
+      await refreshDatasetLogs();
+    }
+
+    async function refreshDatasetLogs() {
+      const base = (document.getElementById('dataset-api-base')?.value || '').replace(/\/+$/, '');
+      const area = document.getElementById('dataset-logs');
+      area.value = 'Loading logs...\n';
+      try {
+        const resp = await fetch(`${base}/dataset_logs?lines=200`);
+        const data = await resp.json();
+        if (!resp.ok || data.status !== 'ok') {
+          throw new Error(data.message || `HTTP ${resp.status}`);
+        }
+        const lines = [];
+        for (const [name, rows] of Object.entries(data.logs || {})) {
+          lines.push(`===== ${name} =====`);
+          for (const row of rows) lines.push(row);
+          lines.push('');
+        }
+        area.value = lines.join('\n') || 'No logs yet.';
+      } catch (e) {
+        area.value = `Failed to load logs: ${e.message || e}`;
+      }
     }
 
     function publishJoints() {
@@ -514,7 +693,7 @@
       const yaml = `# vr_remapper.yaml
 scale: ${scale}
 
-# reference_pose из логов робота (руки перед собой, слегка внизу)
+# reference_pose from robot logs (arms in front, slightly lower)
 reference_pose:
   left: [0.143281, 0.103784, 0.020140]
   right: [0.124819, -0.087679, 0.016086]
@@ -583,11 +762,11 @@ reference_pose:
       document.getElementById('mode-vr').className = manualMode ? 'secondary' : 'active';
       document.getElementById('mode-manual').className = manualMode ? 'active' : 'secondary';
       document.getElementById('mode-status').textContent = manualMode
-        ? 'Manual: перетаскивайте сферы (голубая=левая, оранжевая=правая)'
+        ? 'Manual: drag spheres (cyan=left, orange=right)'
         : 'VR: poses from /quest/poses';
       document.getElementById('manual-hint').style.display = manualMode ? 'block' : 'none';
       document.getElementById('xy-panel').style.display = manualMode ? 'block' : 'none';
-      if (controls) controls.enabled = !manualMode;  // отключаем вращение сцены в Manual — иначе не перетащить
+      if (controls) controls.enabled = !manualMode;  // disable scene rotation in Manual — otherwise cannot drag
       if (manualMode) {
         tgtLeftMesh.visible = tgtRightMesh.visible = true;
         tgtLeftBodyLink = { x: T_POSE_LEFT.x, y: T_POSE_LEFT.y, z: T_POSE_LEFT.z };
@@ -604,22 +783,29 @@ reference_pose:
     }
 
     document.getElementById('btn-connect').addEventListener('click', connect);
-    document.getElementById('btn-x').addEventListener('mousedown', () => { xyXPressed = true; publishJoints(); document.getElementById('xy-status').textContent = 'X нажат — управление включено'; });
-    document.getElementById('btn-x').addEventListener('mouseup', () => { xyXPressed = false; publishJoints(); document.getElementById('xy-status').textContent = xyYPressed ? 'Y нажат' : 'Нажмите X для включения'; });
+    document.getElementById('btn-x').addEventListener('mousedown', () => { xyXPressed = true; publishJoints(); document.getElementById('xy-status').textContent = 'X pressed — control enabled'; });
+    document.getElementById('btn-x').addEventListener('mouseup', () => { xyXPressed = false; publishJoints(); document.getElementById('xy-status').textContent = xyYPressed ? 'Y pressed' : 'Press X to enable'; });
     document.getElementById('btn-x').addEventListener('mouseleave', () => { if (xyXPressed) { xyXPressed = false; publishJoints(); } });
-    document.getElementById('btn-y').addEventListener('mousedown', () => { xyYPressed = true; publishJoints(); document.getElementById('xy-status').textContent = 'Y нажат — стоп, руки в стартовую позу'; });
-    document.getElementById('btn-y').addEventListener('mouseup', () => { xyYPressed = false; publishJoints(); document.getElementById('xy-status').textContent = xyXPressed ? 'X нажат' : 'Нажмите X для включения'; });
+    document.getElementById('btn-y').addEventListener('mousedown', () => { xyYPressed = true; publishJoints(); document.getElementById('xy-status').textContent = 'Y pressed — stop, arms to start pose'; });
+    document.getElementById('btn-y').addEventListener('mouseup', () => { xyYPressed = false; publishJoints(); document.getElementById('xy-status').textContent = xyXPressed ? 'X pressed' : 'Press X to enable'; });
     document.getElementById('btn-y').addEventListener('mouseleave', () => { if (xyYPressed) { xyYPressed = false; publishJoints(); } });
     document.getElementById('mode-vr').addEventListener('click', () => setMode('vr'));
     document.getElementById('mode-manual').addEventListener('click', () => setMode('manual'));
     document.getElementById('axis-map').addEventListener('change', () => applyAxisMapToTargets());
     document.getElementById('btn-export').addEventListener('click', exportSettings);
+    document.getElementById('btn-dataset-refresh').addEventListener('click', refreshDatasetStatus);
+    document.getElementById('btn-dataset-logs').addEventListener('click', refreshDatasetLogs);
+    document.getElementById('btn-open-dataset-dashboard').addEventListener('click', () => {
+      const href = window.location.href.replace(/teleop_debug\.html.*$/, 'dataset_dashboard.html');
+      window.open(href, '_blank');
+    });
     const scaleEl = document.getElementById('scale');
     if (scaleEl) {
       scaleEl.addEventListener('change', publishScale);
       scaleEl.addEventListener('input', publishScale);
     }
     init3D();
+    setInterval(refreshDatasetStatus, 5000);
   </script>
 </body>
 </html>

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-VR Remapper: маппинг + калибровка (R_A) + scale.
+VR Remapper: axis mapping + calibration (R_A) + scale.
 
-Эталонная поза робота — руки перед собой, слегка внизу (reference_pose).
-Оператор приводит руки в похожее положение, нажимает R_A — вычисляется offset.
+Reference pose: arms in front, slightly lower (reference_pose).
+Operator brings hands to similar position, presses R_A — offset is computed.
 output = mapped_vr + offset; output *= scale
 
-SCALE (0.0001..100) — чувствительность, обновляется из UI на лету.
+SCALE (0.0001..100) — sensitivity, live update from UI.
 """
 
 import copy
@@ -17,7 +17,7 @@ from std_msgs.msg import Float64
 
 
 def _controller_to_body_link(x, y, z, is_left):
-    """Маппинг: Quest → body_link. Меняй swap/знаки здесь."""
+    """Mapping: Quest -> body_link. Change swap/signs here."""
     if is_left:
         return (z, -x, y)
     else:
@@ -30,7 +30,7 @@ class VRRemapperNode:
         self.quest_poses = None
         self.r_a_pressed = False
 
-        # Эталонная поза робота (из логов)
+        # Reference pose from robot logs
         ref_left = rospy.get_param('~reference_pose/left', [0.143281, 0.103784, 0.020140])
         ref_right = rospy.get_param('~reference_pose/right', [0.124819, -0.087679, 0.016086])
         self.ref_left = [float(ref_left[0]), float(ref_left[1]), float(ref_left[2])]

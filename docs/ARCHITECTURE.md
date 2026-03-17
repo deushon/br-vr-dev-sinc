@@ -154,3 +154,29 @@
 | `teleop_fetch/config/vr_remapper.yaml` | reference_pose, scale по умолчанию |
 | `teleop_fetch/config/teleop.yaml` | servo IDs, arm start, head, VR topics |
 | `my_package/config/fast_ik.yaml` | gripper, move_groups, left_hand conversion |
+| `teleop_fetch/config/dataset_recorder.yaml` | dataset recorder topics, storage paths, upload API |
+
+---
+
+## 6. Dataset Recording Architecture (v1)
+
+```mermaid
+flowchart LR
+quest[QuestHeadset] -->|/record_sessions startStop| recorder[dataset_recorder_node]
+quest -->|/quest/poses /quest/joints| teleopFlow[TeleopFlow]
+robotSensors[RobotSensors camera imu joints] --> recorder
+quest -->|POST /upload_dataset :9191| uploadApi[dataset_upload_server]
+uploadApi --> inbox[upload_inbox_dir]
+inbox --> recorder
+recorder --> hbr[datasetId.hbr]
+hbr --> dataNode[DATA_NODE]
+```
+
+### Recorder responsibilities
+
+- Keep exactly one active dataset recording at a time.
+- Capture robot data with high-rate in-memory buffering.
+- Finalize robot-side `.hbr` structure on stop event.
+- Attach headset operator payload when `POST /upload_dataset` is received.
+- Produce `metadata.json` and `lerobot_manifest/*` for downstream conversion.
+- Auto-push to DATA_NODE via `POST /sessions/upload` (multipart, see `DATA_NODE/ROBOT_SERVICE_INTEGRATION.md`).
