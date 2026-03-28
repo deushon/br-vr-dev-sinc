@@ -2,6 +2,8 @@
 
 ROS package for dual-arm robot teleoperation using a Quest VR headset on ROS1 Noetic.
 
+**Documentation:** [DOC/README.md](DOC/README.md) (all technical docs) · [DEV_AI.md](DEV_AI.md) (AI agents)
+
 > `teleop_fetch` is the historical/internal package name. The code is robot-agnostic and not tied to any specific vendor robot; Ainex is simply the first robot family with a full configuration and MoveIt integration (see the `ainex_moveit` config package).
 
 ## Features
@@ -162,10 +164,12 @@ Scaling: robot is 5x smaller than operator (coefficient 0.2).
 
 For dataset recording semantics and `.hbr` container format, see:
 
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — abstraction levels, mappings, data flows.
-- [PROJECT_STATE.md](docs/PROJECT_STATE.md) — package status.
-- [TELEOP_DATAS.md](docs/TELEOP_DATAS.md) — headset event and upload payload contract.
-- [HBR.md](docs/HBR.md) — `.hbr` container format and storage requirements.
+- [DOC/README.md](DOC/README.md) — full documentation index
+- [ARCHITECTURE.md](DOC/ARCHITECTURE.md) — abstraction levels, mappings, data flows
+- [PROJECT_STATE.md](DOC/PROJECT_STATE.md) — package status
+- [TODO.md](DOC/TODO.md) — known issues / backlog
+- [TELEOP_DATAS.md](DOC/TELEOP_DATAS.md) — headset event and upload payload contract
+- [HBR.md](DOC/HBR.md) — `.hbr` container format and storage requirements
 
 ## Example robot config (Ainex)
 
