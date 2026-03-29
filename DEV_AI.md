@@ -1,5 +1,9 @@
 # DEV_AI — контекст для агентов (br-vr-dev-sinc / VR Teleop)
 
+## Единая точка входа экосистемы (KYR + x402 + teleop_fetch)
+
+Запуск всей связки и ссылки на документацию: **[../br_bringup/DEV_AI.md](../br_bringup/DEV_AI.md)**, **[../br_bringup/README.md](../br_bringup/README.md)**.
+
 ## Назначение
 
 Репозиторий с телеоперацией с Quest VR для двурукого робота (ROS 1 Noetic). Главный пакет: **`teleop_fetch`** — единая публикация в `/ros_robot_controller/bus_servo/set_position`. Поток данных:
