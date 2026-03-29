@@ -63,9 +63,23 @@ This is the final payload assembled by the headset `DatasetManager`.
 {  
   "source": "unity_quest_dataset",  
   "generatedUtcIso": "2026-03-17T18:45:12.3456789Z",  
+  "acceptedAtUtcIso": "2026-03-17T18:40:00.000Z",  
+  "teleopControl": {
+    "events": [
+      { "eventType": "get_control", "timestampUtcIso": "2026-03-17T18:40:05.000Z" },
+      { "eventType": "lost_control", "timestampUtcIso": "2026-03-17T18:45:00.000Z" }
+    ]
+  },
   "records": []  
 }
 ```
+
+Optional top-level fields:
+
+- `acceptedAtUtcIso` — ISO-8601 UTC when the VR app accepted the teleop session.
+- `teleopControl` — object with `events[]`; each event has `eventType` and `timestampUtcIso` (strings). Typical `eventType` values: `get_control`, `lost_control`.
+
+DATA_NODE ingest and multipart mirror: [DATA_NODE_OPERATOR_SESSION_SPEC.md](DATA_NODE_OPERATOR_SESSION_SPEC.md).
 
 ---
 
@@ -234,6 +248,12 @@ If the input mode is `hands`, for example:
 {  
   "source": "unity_quest_dataset",  
   "generatedUtcIso": "2026-03-17T18:45:12.3456789Z",  
+  "acceptedAtUtcIso": "2026-03-17T18:40:00.000Z",  
+  "teleopControl": {
+    "events": [
+      { "eventType": "get_control", "timestampUtcIso": "2026-03-17T18:40:05.000Z" }
+    ]
+  },
   "records": [  
     {  
       "recordId": "7d7d3d7c4f1b4f2c8d5c2b0e0a123456",  
@@ -325,6 +345,13 @@ If the input mode is `hands`, for example:
       "type": "string",
       "format": "date-time"
     },
+    "acceptedAtUtcIso": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "teleopControl": {
+      "$ref": "#/$defs/TeleopControl"
+    },
     "records": {
       "type": "array",
       "items": {
@@ -333,6 +360,33 @@ If the input mode is `hands`, for example:
     }
   },
   "$defs": {
+    "TeleopControl": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TeleopControlEvent"
+          }
+        }
+      }
+    },
+    "TeleopControlEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventType", "timestampUtcIso"],
+      "properties": {
+        "eventType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timestampUtcIso": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "UnixTimeNs": {
       "type": "integer",
       "description": "Unix timestamp in nanoseconds"

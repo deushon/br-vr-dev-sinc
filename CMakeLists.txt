@@ -49,4 +49,5 @@ install(DIRECTORY config/ launch/ web/
 if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(tests/test_teleop_state_contract.py)
   catkin_add_nosetests(tests/test_operator_buttons.py)
+  catkin_add_nosetests(tests/test_upload_payload_session_fields.py)
 endif()

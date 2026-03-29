@@ -109,7 +109,7 @@ curl -sS -X POST \
   "https://<raid-host>/api/teleop/robots/${ROBOT_ID}/dataset/upload_dataset" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
-  -d '{"source":"test","records":[]}'
+  -d '{"source":"test","generatedUtcIso":"2026-03-29T12:00:00.000Z","acceptedAtUtcIso":"2026-03-29T11:55:00.000Z","teleopControl":{"events":[{"eventType":"get_control","timestampUtcIso":"2026-03-29T11:56:00.000Z"}]},"records":[{"recordId":"r1","label":"l","taskName":"t","data":{"frames":[]}}]}'
 ```
 
 ```bash
@@ -138,7 +138,7 @@ Direct `http://<robot-ip>:9191` remains valid **only** on LAN (e.g. lab without 
 
 - **DATA_NODE** `POST /sessions/upload` (robot → DATA_NODE, multipart)—not operator-facing through this route.
 - **rosbridge** WebSocket—unchanged.
-- Changing JSON schemas of `/upload_dataset`—remains entirely on the robot.
+- Changing JSON schemas of `/upload_dataset`—remains entirely on the robot. The request body may include optional `acceptedAtUtcIso` and `teleopControl` (see [TELEOP_DATAS.md](TELEOP_DATAS.md), [DATA_NODE_OPERATOR_SESSION_SPEC.md](DATA_NODE_OPERATOR_SESSION_SPEC.md)); RAID still forwards the body unchanged.
 
 ---
 

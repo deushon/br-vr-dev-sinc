@@ -458,6 +458,22 @@ class UploadHandler(BaseHTTPRequestHandler):
         parts.append(b'Content-Disposition: form-data; name="label"\r\n\r\n')
         parts.append(label.encode("utf-8"))
         parts.append(b"\r\n")
+        session_meta = {}
+        for key in ("source", "generatedUtcIso", "acceptedAtUtcIso"):
+            val = metadata.get(key)
+            if val is not None and str(val).strip() != "":
+                session_meta[key] = val
+        tc = metadata.get("teleopControl")
+        if isinstance(tc, dict):
+            session_meta["teleopControl"] = tc
+        if session_meta:
+            parts.append(("--%s\r\n" % boundary).encode("utf-8"))
+            parts.append(
+                b'Content-Disposition: form-data; name="operatorSessionMeta"\r\n'
+                b"Content-Type: application/json\r\n\r\n"
+            )
+            parts.append(json.dumps(session_meta, ensure_ascii=True).encode("utf-8"))
+            parts.append(b"\r\n")
         parts.append(("--%s\r\n" % boundary).encode("utf-8"))
         parts.append(
             ('Content-Disposition: form-data; name="file"; filename="%s.hbr.tar.gz"\r\n' % dataset_id).encode("utf-8")

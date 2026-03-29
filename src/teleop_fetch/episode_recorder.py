@@ -180,7 +180,14 @@ class EpisodeRecorder:
         write_events_jsonl(os.path.join(self._hbr_dir, "operator", "events.jsonl"), self._events)
         write_lerobot_manifest(self._hbr_dir, metadata, len(self._robot_frames), len(self._operator_frames))
 
-    def attach_upload_record(self, record: Dict[str, Any], generated_utc_iso: str, source: str) -> None:
+    def attach_upload_record(
+        self,
+        record: Dict[str, Any],
+        generated_utc_iso: str,
+        source: str,
+        accepted_at_utc_iso: str = "",
+        teleop_control: Optional[Dict[str, Any]] = None,
+    ) -> None:
         os.makedirs(self._hbr_dir, exist_ok=True)
         os.makedirs(os.path.join(self._hbr_dir, "robot"), exist_ok=True)
         os.makedirs(os.path.join(self._hbr_dir, "operator"), exist_ok=True)
@@ -215,14 +222,17 @@ class EpisodeRecorder:
                     joints=[JointValue(name=str(j.get("name", "")), value=float(j.get("value", 0.0))) for j in frame.get("joints", [])],
                 )
             )
-        events.append(
-            {
-                "type": "upload_received",
-                "timeUnixNs": int(time.time_ns()),
-                "generatedUtcIso": generated_utc_iso,
-                "source": source,
-            }
-        )
+        upload_ev: Dict[str, Any] = {
+            "type": "upload_received",
+            "timeUnixNs": int(time.time_ns()),
+            "generatedUtcIso": generated_utc_iso,
+            "source": source,
+        }
+        if str(accepted_at_utc_iso or "").strip():
+            upload_ev["acceptedAtUtcIso"] = str(accepted_at_utc_iso).strip()
+        if teleop_control is not None:
+            upload_ev["teleopControl"] = teleop_control
+        events.append(upload_ev)
         self._operator_frames = operator_frames
         self._events.extend(events)
         self.task_name = str(record.get("taskName", self.task_name))
@@ -244,6 +254,14 @@ class EpisodeRecorder:
         metadata["label"] = self.label
         metadata["source"] = source
         metadata["generatedUtcIso"] = generated_utc_iso
+        if str(accepted_at_utc_iso or "").strip():
+            metadata["acceptedAtUtcIso"] = str(accepted_at_utc_iso).strip()
+        else:
+            metadata.pop("acceptedAtUtcIso", None)
+        if teleop_control is not None:
+            metadata["teleopControl"] = teleop_control
+        else:
+            metadata.pop("teleopControl", None)
         metadata["sourceWsUrl"] = data.get("sourceWsUrl", metadata.get("sourceWsUrl", ""))
         metadata["sourceSendHz"] = float(data.get("sourceSendHz", metadata.get("sourceSendHz", 0.0)))
         metadata["startedLocalUnixTimeNs"] = int(data.get("startedLocalUnixTimeNs", metadata.get("startedLocalUnixTimeNs", 0)))
@@ -312,6 +330,10 @@ class DatasetSessionManager:
     def attach_upload_payload(self, payload: Dict[str, Any]) -> List[str]:
         source = str(payload.get("source", "unity_quest_dataset"))
         generated_utc_iso = str(payload.get("generatedUtcIso", ""))
+        accepted_at_utc_iso = str(payload.get("acceptedAtUtcIso", ""))
+        teleop_control = payload.get("teleopControl")
+        if teleop_control is not None and not isinstance(teleop_control, dict):
+            teleop_control = None
         updated = []
         for rec in payload.get("records", []):
             record_id = str(rec.get("recordId", ""))
@@ -323,7 +345,13 @@ class DatasetSessionManager:
                 recorder = EpisodeRecorder(record_id, "", "", self.config)
                 with self._lock:
                     self._sessions[record_id] = recorder
-            recorder.attach_upload_record(rec, generated_utc_iso=generated_utc_iso, source=source)
+            recorder.attach_upload_record(
+                rec,
+                generated_utc_iso=generated_utc_iso,
+                source=source,
+                accepted_at_utc_iso=accepted_at_utc_iso,
+                teleop_control=teleop_control,
+            )
             updated.append(record_id)
         return updated
 

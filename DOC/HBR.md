@@ -105,6 +105,8 @@ Top-level metadata describing this `.hbr` recording:
 }
 ```
 
+After operator data is merged from `upload_dataset`, `metadata.json` may also contain `generatedUtcIso`, `acceptedAtUtcIso`, and `teleopControl` (VR session timeline). See [DATA_NODE_OPERATOR_SESSION_SPEC.md](DATA_NODE_OPERATOR_SESSION_SPEC.md).
+
 
 ***
 
@@ -534,6 +536,13 @@ Body example:
 {
   "source": "unity_quest_dataset",
   "generatedUtcIso": "2026-03-17T14:12:33.1234567Z",
+  "acceptedAtUtcIso": "2026-03-17T14:00:00.000Z",
+  "teleopControl": {
+    "events": [
+      { "eventType": "get_control", "timestampUtcIso": "2026-03-17T14:00:10.000Z" },
+      { "eventType": "lost_control", "timestampUtcIso": "2026-03-17T14:12:20.000Z" }
+    ]
+  },
   "datasetId": "a4e6a0b6-3d1a-4b0f-9d5a-2f4b32b89c01",
   "records": [
     {
@@ -575,6 +584,7 @@ Body example:
 Key fields:
 
 - `datasetId`: must match the `.hbr` dataset already created by the robot-side recorder.
+- `acceptedAtUtcIso`, `teleopControl`: optional session metadata from Quest; propagated into `metadata.json` and into DATA_NODE multipart `operatorSessionMeta` (see [DATA_NODE_OPERATOR_SESSION_SPEC.md](DATA_NODE_OPERATOR_SESSION_SPEC.md)).
 - `frames`: full operator timeline; on robot, this is encoded into `operator_state.bin` and `events.jsonl` using the layouts above.
 
 

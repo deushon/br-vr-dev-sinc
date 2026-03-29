@@ -65,6 +65,8 @@ class UploadPayload:
         self.records = payload.get("records", [])
         self.source = payload.get("source", "")
         self.generated_utc_iso = payload.get("generatedUtcIso", "")
+        self.accepted_at_utc_iso = payload.get("acceptedAtUtcIso", "")
+        self.teleop_control: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_json_bytes(cls, raw: bytes, default_record_id: str = "") -> "UploadPayload":
@@ -88,6 +90,11 @@ class UploadPayload:
         self.payload["generatedUtcIso"] = str(
             self._first_present(self.payload, ["generatedUtcIso", "generated_utc_iso"], "")
         )
+        self.payload["acceptedAtUtcIso"] = str(
+            self._first_present(self.payload, ["acceptedAtUtcIso", "accepted_at_utc_iso"], "")
+        )
+        self.payload.pop("accepted_at_utc_iso", None)
+        self._normalize_teleop_control_field()
         records = self.payload.get("records")
         if not isinstance(records, list):
             self.records = []
@@ -135,6 +142,40 @@ class UploadPayload:
         self.payload["records"] = normalized_records
         self.source = self.payload["source"]
         self.generated_utc_iso = self.payload["generatedUtcIso"]
+        self.accepted_at_utc_iso = self.payload.get("acceptedAtUtcIso", "")
+        self.teleop_control = self.payload.get("teleopControl")
+
+    def _normalize_teleop_control_field(self) -> None:
+        raw = self._first_present(self.payload, ["teleopControl", "teleop_control"], None)
+        self.payload.pop("teleop_control", None)
+        if raw is None:
+            self.payload.pop("teleopControl", None)
+            return
+        if not isinstance(raw, dict):
+            self.payload["teleopControl"] = raw
+            return
+        out = dict(raw)
+        events_raw = out.get("events")
+        if events_raw is None:
+            out["events"] = []
+        elif isinstance(events_raw, list):
+            norm_events: List[Dict[str, str]] = []
+            for ev in events_raw:
+                if not isinstance(ev, dict):
+                    norm_events.append({"eventType": "", "timestampUtcIso": ""})
+                    continue
+                norm_events.append(
+                    {
+                        "eventType": str(
+                            self._first_present(ev, ["eventType", "event_type"], "")
+                        ),
+                        "timestampUtcIso": str(
+                            self._first_present(ev, ["timestampUtcIso", "timestamp_utc_iso"], "")
+                        ),
+                    }
+                )
+            out["events"] = norm_events
+        self.payload["teleopControl"] = out
 
     def validate(self) -> None:
         if not isinstance(self.payload, dict):
@@ -156,6 +197,23 @@ class UploadPayload:
                 raise ValueError("records[%d].data must be an object" % idx)
             if "frames" not in data or not isinstance(data["frames"], list):
                 raise ValueError("records[%d].data.frames must be an array" % idx)
+        if "teleopControl" in self.payload:
+            tc = self.payload["teleopControl"]
+            if not isinstance(tc, dict):
+                raise ValueError("teleopControl must be an object")
+            evs = tc.get("events")
+            if evs is not None and not isinstance(evs, list):
+                raise ValueError("teleopControl.events must be an array")
+            if isinstance(evs, list):
+                for i, ev in enumerate(evs):
+                    if not isinstance(ev, dict):
+                        raise ValueError("teleopControl.events[%d] must be an object" % i)
+                    et = str(ev.get("eventType", "")).strip()
+                    ts = str(ev.get("timestampUtcIso", "")).strip()
+                    if not et:
+                        raise ValueError("teleopControl.events[%d].eventType is required" % i)
+                    if not ts:
+                        raise ValueError("teleopControl.events[%d].timestampUtcIso is required" % i)
 
     def record_ids(self) -> List[str]:
         ids = []

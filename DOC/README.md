@@ -17,6 +17,7 @@
 - [TELEOP_DATAS.md](TELEOP_DATAS.md) — события шлема, контракт upload API.
 - [HBR.md](HBR.md) — формат контейнера `.hbr`, хранение.
 - [RAID_APP_DATASET_PROXY_SPEC.md](RAID_APP_DATASET_PROXY_SPEC.md) — спецификация для **RAID App** (`x402_raid_app`): HTTP reverse proxy к dataset API на роботе (`:9191`) для операторов через JWT.
+- [DATA_NODE_OPERATOR_SESSION_SPEC.md](DATA_NODE_OPERATOR_SESSION_SPEC.md) — для **DATA_NODE**: расширенные поля сессии телеопа, `metadata.json`, multipart `operatorSessionMeta` при `POST /sessions/upload`.
 
 ---
 
