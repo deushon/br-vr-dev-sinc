@@ -82,7 +82,7 @@ roslaunch teleop_fetch teleop_debug.launch
 - `/teleop_fetch/poses` (`PoseArray`) - merged poses (VR/manual)
 - `/teleop_fetch/scale` (`Float64`) - sensitivity 0.0001..100 from UI
 - `/teleop_fetch/arm_servo_targets` (`SetBusServosPosition`) - IK outputs from `fast_ik_node`
-- `/teleop_state` (**latched**): при старте ноды и при **ACTIVE** после гранта — `stop_control`; `get_control` по **L_X** (если руки ещё не armed); `stop_control` по **L_Y** только если руки были armed, либо при `end_session`. Голова при ACTIVE без L_X; руки на KYR только после L_X. IK: `/teleop_fetch/teleop_state`. Remap: `~teleop_state_topic`, joints: `~vr_input/joints_topic`
+- `/teleop_state` (**latched**): см. `DOC/ARCHITECTURE.md`. Кратко: после гранта по умолчанию ждётся фронт **`~operator_arm/joint_name_lx`** на `~vr_input/joints_topic`; параметр **`~arm_stream_requires_lx:=false`** — стрим рук сразу после ACTIVE. IK: `/teleop_fetch/teleop_state`.
 - `/record_sessions` (`std_msgs/String(JSON)`) - dataset lifecycle events
 
 ## Code structure

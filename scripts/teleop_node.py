@@ -53,7 +53,10 @@ class TeleopNode:
         # VR data cache
         self.vr_data = VRData()
 
-        # After KYR ACTIVE: head tracks VR immediately; L_X arms only arm streaming to KYR; L_Y disarms arms + head home.
+        # After KYR ACTIVE: head free; arm stream to KYR gated (see ~arm_stream_requires_lx); L_Y disarms.
+        self.arm_stream_requires_lx = bool(self.config['arm_stream_requires_lx'])
+        self._joint_lx_name = self.config['joint_name_lx']
+        self._joint_ly_name = self.config['joint_name_ly']
         self.operator_armed = False
         self._prev_lx = 0.0
         self._prev_ly = 0.0
@@ -115,7 +118,13 @@ class TeleopNode:
         self.kyr_open_session = rospy.ServiceProxy('/kyr/open_session', OpenSession)
         self.kyr_close_session = rospy.ServiceProxy('/kyr/close_session', CloseSession)
 
-        rospy.loginfo('teleop_fetch initialized, session_state=IDLE.')
+        rospy.loginfo(
+            'teleop_fetch initialized: session_state=IDLE, arm_stream_requires_lx=%s, arm_buttons %s/%s on %s',
+            self.arm_stream_requires_lx,
+            self._joint_lx_name,
+            self._joint_ly_name,
+            self.config['joints_topic'],
+        )
 
     def _handle_receive_grant(self, req):
         if self.session_state in ['ACTIVE', 'PENDING_GRANT']:
@@ -131,13 +140,22 @@ class TeleopNode:
                 self.session_state = 'ACTIVE'
                 self.current_session_id = res.session_id
                 rospy.loginfo(f"KYR session {res.session_id} opened. State -> ACTIVE")
-                self.operator_armed = False
                 self._xy_edges_need_sync = True
                 self._publish_arm_start_position()
                 self._publish_teleop_state('stop_control')
-                rospy.loginfo(
-                    'Session ACTIVE: head free; L_X arms arms (get_control); L_Y disarms if armed (stop_control).'
-                )
+                if self.arm_stream_requires_lx:
+                    self.operator_armed = False
+                    rospy.loginfo(
+                        'Session ACTIVE: arm stream waits for rising edge on joint "%s" (%s), or set ~arm_stream_requires_lx:=false',
+                        self._joint_lx_name,
+                        self.config['joints_topic'],
+                    )
+                else:
+                    self.operator_armed = True
+                    self._publish_teleop_state('get_control')
+                    rospy.loginfo(
+                        'Session ACTIVE: arm_stream_requires_lx=false — arm targets forwarded immediately (/teleop_state: get_control)'
+                    )
                 return ReceiveGrantResponse(success=True, message=res.message)
             else:
                 self.session_state = 'FAILED'
@@ -179,13 +197,13 @@ class TeleopNode:
     def _joints_callback(self, msg):
         joint_dict = joint_state_to_dict(msg)
         update_vr_data_from_joints(self.vr_data, joint_dict)
-        self._process_operator_xy_buttons()
+        lx = float(joint_dict.get(self._joint_lx_name, 0.0))
+        ly = float(joint_dict.get(self._joint_ly_name, 0.0))
+        self._process_operator_xy_buttons(lx, ly)
 
-    def _process_operator_xy_buttons(self):
+    def _process_operator_xy_buttons(self, lx, ly):
         if self.session_state != 'ACTIVE':
             return
-        lx = self.vr_data.left_x
-        ly = self.vr_data.left_y
         if self._xy_edges_need_sync:
             self._prev_lx = lx
             self._prev_ly = ly
@@ -200,7 +218,10 @@ class TeleopNode:
         elif x_edge and not self.operator_armed:
             self.operator_armed = True
             self._publish_teleop_state('get_control')
-            rospy.loginfo('L_X: operator armed — streaming arms to robot (/teleop_state: get_control)')
+            rospy.loginfo(
+                'Arm stream armed: joint "%s" (/teleop_state: get_control)',
+                self._joint_lx_name,
+            )
 
     def _process_head_control(self):
         pan, tilt = compute_head_targets(
@@ -257,8 +278,21 @@ class TeleopNode:
         rospy.loginfo('Grippers reset')
 
     def _arm_targets_callback(self, msg):
-        """Forward arm targets from fast_ik to KYR proxy when session armed (L_X)."""
+        """Forward arm targets from fast_ik to KYR proxy when session armed."""
         if self.session_state != 'ACTIVE' or not self.operator_armed:
+            if (
+                self.session_state == 'ACTIVE'
+                and not self.operator_armed
+                and self.arm_stream_requires_lx
+                and msg.position
+            ):
+                rospy.logwarn_throttle(
+                    10.0,
+                    'teleop_fetch: dropping arm_servo_targets (ACTIVE but not armed). '
+                    'Press joint "%s" on %s or set param ~arm_stream_requires_lx:=false.',
+                    self._joint_lx_name,
+                    self.config['joints_topic'],
+                )
             return
         self.servo_pub.publish(msg)
 

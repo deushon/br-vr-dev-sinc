@@ -121,7 +121,7 @@
 | 5     | `/teleop_fetch/poses`              | PoseArray in body_link                     |
 | 6     | `fast_ik_node`                     | IK → joint values → servo positions        |
 | 7     | `/teleop_fetch/arm_servo_targets`  | SetBusServosPosition                       |
-| 8     | `teleop_fetch`                     | requests `KYR`, forwards to `/kyr/bus_servo_in` when ACTIVE |
+| 8     | `teleop_fetch`                     | `KYR`, в `/kyr/bus_servo_in` только при **ACTIVE** и **armed** (см. ниже) |
 
 ### Operator sync (двусторонняя связь)
 
@@ -129,10 +129,18 @@
 
 | Топик | Тип | Кто публикует | Смысл |
 |-------|-----|---------------|--------|
-| `/teleop_state` | `std_msgs/String` | `teleop_fetch` | При **старте ноды** и при переходе в **ACTIVE** после гранта — **`stop_control`** (обратная связь: руки ещё не в «режиме управления»). **`get_control`** — по **фронту L_X**, если до этого руки не были armed. **`stop_control`** — по **L_Y**, только если управление руками было разрешено (armed), либо при **`end_session`**. **Голова** при ACTIVE управляется сразу; **руки** на KYR только после L_X. Паблишер **latched**. |
+| `/teleop_state` | `std_msgs/String` | `teleop_fetch` | При **старте ноды** и при **ACTIVE** после гранта — **`stop_control`**. **`get_control`** — по фронту кнопки **`~operator_arm/joint_name_lx`** (по умолчанию `L_X`), если руки ещё не armed; при **`~arm_stream_requires_lx:=false`** — сразу после гранта идёт **`get_control`** и руки armed без кнопки. **`stop_control`** — по **`joint_name_ly`** (по умолч. `L_Y`) если был armed, или **`end_session`**. **Голова** при ACTIVE без ожидания кнопки; **руки** на KYR только в режиме **armed**. Паблишер **latched**. |
 | `/teleop_fetch/teleop_state` | `ainex_interfaces/TeleopState` | `fast_ik_node` | Поток статуса IK (ok / out_of_bounds / errors), публикуется в цикле обработки поз; **не** заменяет `/teleop_state`. |
 
-Цепочка: RAID → грант → `receive_grant` → **`open_session`** → **ACTIVE** → оператор жмёт **L_X** → **`get_control`** + стрим `arm_servo_targets` и головы. **R_A** (калибровка) по-прежнему в **`vr_remapper`**, не в `teleop_node`.
+Цепочка: RAID → грант → **`open_session`** → **ACTIVE** → (если `arm_stream_requires_lx`) фронт **L_X** на **`~vr_input/joints_topic`** → **armed** → стрим **`/teleop_fetch/arm_servo_targets`** → **`/kyr/bus_servo_in`**. **R_A** — в **`vr_remapper`**.
+
+#### Почему руки не едут при живом fast_ik
+
+1. **Нет гранта / не ACTIVE** — `teleop_fetch` не шлёт сервы на KYR.
+2. **`arm_stream_requires_lx:=true` (по умолчанию)** — пока не было **нажатия** (фронт >0.5) по имени **`joint_name_lx`**, `arm_servo_targets` **отбрасываются** (в лог раз в 10 с — предупреждение).
+3. **В `JointState` нет нужного имени** — клиент (Quest/rosbridge) шлёт другие `name[]`; задайте **`~operator_arm/joint_name_lx`** под вашу схему или **`~arm_stream_requires_lx:=false`** для стенда без кнопки.
+4. **Нет потока `/quest/joints`** — фронт кнопки не обнаружить; голова может работать от поз, руки — нет до armed.
+5. **KYR proxy** — без открытой сессии или при `check_policy` → deny команды не доходят до `/bus_servo/set_position`.
 
 ### Calibration (R_A)
 

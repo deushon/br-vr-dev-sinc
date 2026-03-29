@@ -67,4 +67,9 @@ def load_config():
     config['arm_servo_targets_topic'] = p('arm_servo_targets_topic', '/teleop_fetch/arm_servo_targets')
     config['teleop_state_topic'] = p('teleop_state_topic', '/teleop_state')
 
+    # Arm stream to KYR: if True, need rising edge on operator_arm joint after ACTIVE (Quest L_X).
+    config['arm_stream_requires_lx'] = p('arm_stream_requires_lx', True)
+    config['joint_name_lx'] = p('operator_arm/joint_name_lx', 'L_X')
+    config['joint_name_ly'] = p('operator_arm/joint_name_ly', 'L_Y')
+
     return config

@@ -66,5 +66,13 @@ servo_topic: "/ros_robot_controller/bus_servo/set_position"
 # Internal topic from fast_ik_node (arm_servo_targets)
 arm_servo_targets_topic: "/teleop_fetch/arm_servo_targets"
 
-# Operator sync: std_msgs/String — "get_control" after session ACTIVE (X path), "stop_control" on end (Y path)
+# Operator sync: latched std_msgs/String — see DOC/ARCHITECTURE.md
 teleop_state_topic: "/teleop_state"
+
+# Поток рук на KYR после ACTIVE: true = ждать фронт нажатия на кнопку (см. operator_arm);
+# false = сразу стримить после гранта (как до gating, для стенда без L_X в JointState).
+arm_stream_requires_lx: true
+
+operator_arm:
+  joint_name_lx: "L_X"
+  joint_name_ly: "L_Y"
