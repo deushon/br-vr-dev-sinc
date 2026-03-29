@@ -276,7 +276,11 @@ class UploadHandler(BaseHTTPRequestHandler):
             if not dataset_id:
                 raise ValueError("datasetId is required")
             if not data_node_url:
-                raise ValueError("dataNodeUrl is required")
+                data_node_url = str(
+                    rospy.get_param("~auto_push/data_node_url", "http://192.168.20.53:8088")
+                ).strip()
+            if not data_node_url:
+                raise ValueError("dataNodeUrl is required (set in UI or auto_push/data_node_url)")
         except Exception as exc:
             self._reply(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
             return

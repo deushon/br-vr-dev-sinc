@@ -20,6 +20,7 @@
     button:hover { background: #2ea043; }
     button.secondary { background: #21262d; }
     button.secondary:hover { background: #30363d; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
     button.active { background: #1f6feb; }
     .status { padding: 8px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 12px; }
     .status.connected { background: #23863633; border: 1px solid #238636; }
@@ -62,7 +63,7 @@
         <label>Dataset API base URL</label>
         <input type="text" id="dataset-api-base" value="http://192.168.20.21:9191" placeholder="http://robot-ip:9191">
         <label>DATA_NODE upload URL</label>
-        <input type="text" id="data-node-url" value="http://192.168.20.166:8088" placeholder="http://data-node-ip:8088">
+        <input type="text" id="data-node-url" value="http://192.168.20.53:8088" placeholder="http://data-node-ip:8088">
         <label>DATA_NODE upload path</label>
         <input type="text" id="data-node-upload-path" value="/sessions/upload" placeholder="/sessions/upload">
         <div class="mode-row">
@@ -631,18 +632,30 @@
       const base = (document.getElementById('dataset-api-base')?.value || '').replace(/\/+$/, '');
       const dataNodeUrl = document.getElementById('data-node-url')?.value || '';
       const uploadPath = document.getElementById('data-node-upload-path')?.value || '/sessions/upload';
-      const resp = await fetch(`${base}/dataset_push`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ datasetId, dataNodeUrl, uploadPath })
+      const statusEl = document.getElementById('ds-refresh-status');
+      document.querySelectorAll('#dataset-table-body button[data-act="push"]').forEach((b) => {
+        b.disabled = true;
+        if (b.getAttribute('data-id') === datasetId) b.textContent = 'Pushing…';
       });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || data.status !== 'ok') {
-        alert(`Push failed: ${data.message || resp.status}`);
-      } else {
-        alert(`Push queued/sent for ${datasetId}`);
+      statusEl.textContent = `Status: pushing ${datasetId} to DATA_NODE (may take minutes)…`;
+      try {
+        const resp = await fetch(`${base}/dataset_push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ datasetId, dataNodeUrl, uploadPath })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.status !== 'ok') {
+          alert(`Push failed: ${data.message || resp.status}`);
+        } else {
+          alert(`Push queued/sent for ${datasetId}`);
+        }
+      } catch (e) {
+        alert(`Push failed: ${e.message || e}`);
+      } finally {
+        await refreshDatasetStatus();
+        await refreshDatasetLogs();
       }
-      await refreshDatasetLogs();
     }
 
     async function refreshDatasetLogs() {

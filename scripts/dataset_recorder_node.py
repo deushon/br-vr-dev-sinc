@@ -60,7 +60,7 @@ def _load_recorder_config() -> Dict[str, Any]:
         },
         "auto_push": {
             "enabled": bool(p("auto_push/enabled", True)),
-            "data_node_url": p("auto_push/data_node_url", "http://192.168.20.166:8088"),
+            "data_node_url": p("auto_push/data_node_url", "http://192.168.20.53:8088"),
             "upload_path": p("auto_push/upload_path", "/sessions/upload"),
             "retries": int(p("auto_push/retries", 3)),
             "retry_delay_sec": float(p("auto_push/retry_delay_sec", 3.0)),
@@ -143,7 +143,7 @@ class DatasetRecorderNode:
             return
         payload = {
             "datasetId": dataset_id,
-            "dataNodeUrl": str(cfg.get("data_node_url", "http://192.168.20.166:8088")),
+            "dataNodeUrl": str(cfg.get("data_node_url", "http://192.168.20.53:8088")),
             "uploadPath": str(cfg.get("upload_path", "/sessions/upload")),
         }
         retries = max(1, int(cfg.get("retries", 3)))

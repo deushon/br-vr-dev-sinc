@@ -14,6 +14,7 @@
     input { width: 100%; padding: 8px; border-radius: 6px; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; }
     button { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; background: #1f6feb; color: white; }
     button.secondary { background: #21262d; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
     main { padding: 14px; display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
     .card { border: 1px solid #30363d; border-radius: 8px; background: #161b22; padding: 12px; }
     .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
@@ -44,7 +45,7 @@
       <input id="api-base" value="" placeholder="http://robot-ip:9191">
     </div>
     <div style="min-width:300px;">
-      <input id="data-node-url" value="http://192.168.20.166:8088" placeholder="http://data-node-ip:8088">
+      <input id="data-node-url" value="http://192.168.20.53:8088" placeholder="http://data-node-ip:8088">
     </div>
     <div style="min-width:140px;">
       <input id="upload-path" value="/sessions/upload" placeholder="/sessions/upload" title="DATA_NODE upload path">
@@ -103,7 +104,11 @@
     let chartState = null;
     let chartDuration = null;
     let lastDatasetsDigest = '';
+    let lastDatasets = [];
+    let pushInFlight = null;
     let autoRefreshTimer = null;
+    const DEFAULT_DATA_NODE_URL = 'http://192.168.20.53:8088';
+    const LS_DATA_NODE_URL = 'teleop_dataset_data_node_url';
 
     function apiBase() { return (document.getElementById('api-base').value || '').replace(/\/+$/, ''); }
     function dataNodeUrl() { return (document.getElementById('data-node-url').value || '').replace(/\/+$/, ''); }
@@ -117,6 +122,7 @@
         const data = await resp.json();
         if (!resp.ok || data.status !== 'ok') throw new Error(data.message || `HTTP ${resp.status}`);
         const datasets = data.datasets || [];
+        lastDatasets = datasets;
         renderSummary(data.summary || {}, datasets);
         const digest = JSON.stringify(
           datasets.map((d) => [
@@ -155,6 +161,8 @@
         const state = ds.stuck ? 'STUCK' : (ds.uploadOnly ? 'UPLOAD_ONLY' : 'OK');
         const uploadStatus = ds.uploadStatus || 'pending';
         const canRepush = uploadStatus !== 'uploaded';
+        const pushing = pushInFlight === ds.datasetId;
+        const pushLabel = pushing ? 'Pushing…' : (uploadStatus === 'pending' ? 'Push' : 'Re-push');
         tr.innerHTML = `
           <td title="${ds.datasetId}">${ds.datasetId.slice(0, 20)}${ds.datasetId.length > 20 ? '...' : ''}</td>
           <td>${ds.taskName || ''}</td>
@@ -166,7 +174,7 @@
           <td class="${uploadStatus === 'uploaded' ? 'ok' : (uploadStatus === 'failed' ? 'bad' : '')}">${uploadStatus.toUpperCase()}</td>
           <td class="actions">
             <button class="secondary" data-act="download" data-id="${ds.datasetId}">Download</button>
-            ${canRepush ? `<button class="secondary" data-act="push" data-id="${ds.datasetId}">${uploadStatus === 'pending' ? 'Push' : 'Re-push'}</button>` : ''}
+            ${canRepush ? `<button class="secondary" data-act="push" data-id="${ds.datasetId}" ${pushing ? 'disabled' : ''}>${pushLabel}</button>` : ''}
             <button class="secondary" data-act="delete" data-id="${ds.datasetId}">Delete</button>
           </td>`;
         tbody.appendChild(tr);
@@ -263,18 +271,29 @@
     }
 
     async function pushDataset(datasetId) {
-      const resp = await fetch(`${apiBase()}/dataset_push`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ datasetId, dataNodeUrl: dataNodeUrl(), uploadPath: uploadPath() })
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || data.status !== 'ok') {
-        alert(`Push failed: ${data.message || resp.status}`);
-      } else {
-        alert(`Push done: ${datasetId}`);
+      const status = document.getElementById('status-line');
+      pushInFlight = datasetId;
+      renderTable(lastDatasets);
+      status.textContent = `Status: pushing ${datasetId} to DATA_NODE (large archives can take several minutes)…`;
+      try {
+        const resp = await fetch(`${apiBase()}/dataset_push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ datasetId, dataNodeUrl: dataNodeUrl(), uploadPath: uploadPath() })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.status !== 'ok') {
+          alert(`Push failed: ${data.message || resp.status}`);
+        } else {
+          alert(`Push done: ${datasetId}`);
+        }
+      } catch (e) {
+        alert(`Push failed: ${e.message || e}`);
+      } finally {
+        pushInFlight = null;
+        await refreshStatus();
+        await refreshLogs();
       }
-      await refreshLogs();
     }
 
     async function clearAll() {
@@ -308,6 +327,19 @@
       if (el && !el.value.trim()) {
         el.value = `http://${window.location.hostname}:9191`;
       }
+    })();
+    (function initDataNodeUrl() {
+      const el = document.getElementById('data-node-url');
+      if (!el) return;
+      const saved = (localStorage.getItem(LS_DATA_NODE_URL) || '').trim();
+      if (saved) {
+        el.value = saved;
+      } else if (!el.value.trim() || el.value.includes('192.168.20.166')) {
+        el.value = DEFAULT_DATA_NODE_URL;
+      }
+      el.addEventListener('change', () => {
+        localStorage.setItem(LS_DATA_NODE_URL, el.value.trim());
+      });
     })();
     refreshStatus();
     refreshLogs();
