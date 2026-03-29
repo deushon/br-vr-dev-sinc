@@ -10,7 +10,7 @@
 
 `Quest` → `vr_remapper` (в т.ч. **R_A**) → `pose_source` → `fast_ik` → `teleop_fetch` → KYR. **Голова** при ACTIVE сразу; **руки** на KYR после **L_X**. **`/teleop_state`**: старт и новая сессия — `stop_control`; **L_X** → `get_control`; **L_Y** (если был armed) → `stop_control`. IK: `/teleop_fetch/teleop_state`.
 
-Полный стек по умолчанию: `roslaunch br_bringup ecosystem.launch` (включает `teleop.launch`). Только KYR-шлюз без IK: `with_vr_pipeline:=false`.
+Полный стек по умолчанию: `roslaunch br_bringup ecosystem.launch` (включает `teleop.launch`). Только KYR-шлюз без IK: `with_vr_pipeline:=false`. Датасеты: по умолчанию **`dataset_recorder` + `dataset_upload_server` (:9191) + `dataset_web_server` (:3002, `web/dataset_dashboard.html`)**; выключить: `enable_dataset_recording:=false`.
 
 ## Ключевые пути
 

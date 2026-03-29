@@ -35,6 +35,10 @@ catkin_install_python(PROGRAMS
   scripts/teleop_node.py
   scripts/pose_source_node.py
   scripts/calibration_node.py
+  scripts/vr_remapper_node.py
+  scripts/dataset_recorder_node.py
+  scripts/dataset_upload_server.py
+  scripts/dataset_web_server.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

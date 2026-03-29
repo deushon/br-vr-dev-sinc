@@ -6,7 +6,9 @@
   <arg name="use_gui" default="false" />
   <arg name="pipeline" default="ompl" />
   <arg name="fake_execution_type" default="interpolate" />
+  <!-- Recorder + HTTP :9191 + static web UI (dashboard on ~:3002) -->
   <arg name="enable_dataset_recording" default="true" />
+  <arg name="dataset_web_port" default="3002" />
 
   <!-- robot_description, SRDF, kinematics -->
   <include file="$(find robot)/launch/planning_context.launch">
@@ -65,6 +67,11 @@
   <!-- Upload API: POST :9191/upload_dataset -->
   <node name="dataset_upload_server" pkg="teleop_fetch" type="dataset_upload_server.py" output="screen" if="$(arg enable_dataset_recording)">
     <rosparam command="load" file="$(find teleop_fetch)/config/dataset_recorder.yaml"/>
+  </node>
+
+  <!-- Static web: dataset_dashboard.html, teleop_debug.html -->
+  <node name="dataset_web_server" pkg="teleop_fetch" type="dataset_web_server.py" output="screen" if="$(arg enable_dataset_recording)">
+    <param name="port" value="$(arg dataset_web_port)" />
   </node>
 
   <!-- Calibration_node (legacy T-pose): R_A calibration now in vr_remapper -->

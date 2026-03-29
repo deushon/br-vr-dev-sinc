@@ -41,7 +41,7 @@
     <h1>Dataset Dashboard</h1>
     <div class="grow"></div>
     <div style="min-width:300px;">
-      <input id="api-base" value="http://192.168.20.21:9191" placeholder="http://robot-ip:9191">
+      <input id="api-base" value="" placeholder="http://robot-ip:9191">
     </div>
     <div style="min-width:300px;">
       <input id="data-node-url" value="http://192.168.20.166:8088" placeholder="http://data-node-ip:8088">
@@ -303,6 +303,12 @@
     }
     document.getElementById('auto-refresh').addEventListener('change', setupAutoRefresh);
     setupAutoRefresh();
+    (function initApiBase() {
+      const el = document.getElementById('api-base');
+      if (el && !el.value.trim()) {
+        el.value = `http://${window.location.hostname}:9191`;
+      }
+    })();
     refreshStatus();
     refreshLogs();
   </script>
