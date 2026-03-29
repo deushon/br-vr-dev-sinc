@@ -82,6 +82,7 @@ roslaunch teleop_fetch teleop_debug.launch
 - `/teleop_fetch/poses` (`PoseArray`) - merged poses (VR/manual)
 - `/teleop_fetch/scale` (`Float64`) - sensitivity 0.0001..100 from UI
 - `/teleop_fetch/arm_servo_targets` (`SetBusServosPosition`) - IK outputs from `fast_ik_node`
+- `/teleop_state` (`std_msgs/String`) - operator feedback: `get_control` when session becomes ACTIVE (X path), `stop_control` when control ends (Y path); remap via `~teleop_state_topic`
 - `/record_sessions` (`std_msgs/String(JSON)`) - dataset lifecycle events
 
 ## Code structure

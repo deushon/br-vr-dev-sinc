@@ -4,7 +4,7 @@
 
 Репозиторий с телеоперацией с Quest VR для двурукого робота (ROS 1 Noetic). Главный пакет: **`teleop_fetch`** — единая публикация в `/ros_robot_controller/bus_servo/set_position`. Поток данных:
 
-`Quest` → `vr_remapper` (map + calib + scale) → `pose_source` → `fast_ik` (`my_package`) → `teleop_fetch` → `bus_servo`.
+`Quest` → `vr_remapper` (map + calib + scale) → `pose_source` → `fast_ik` (`my_package`) → `teleop_fetch` → `bus_servo`. Обратная связь оператору: `/teleop_state` (`get_control` / `stop_control`).
 
 ## Ключевые пути
 

@@ -7,6 +7,7 @@ Single point of publication to bus_servo.
 import rospy
 from geometry_msgs.msg import PoseArray
 from sensor_msgs.msg import JointState
+from std_msgs.msg import String
 from ainex_interfaces.msg import HeadState
 from ros_robot_controller.msg import SetBusServosPosition
 
@@ -64,6 +65,11 @@ class TeleopNode:
             HeadState,
             queue_size=1,
         )
+        self.teleop_state_pub = rospy.Publisher(
+            self.config['teleop_state_topic'],
+            String,
+            queue_size=1,
+        )
 
         # Subscribers
         rospy.Subscriber(
@@ -113,6 +119,7 @@ class TeleopNode:
                 self.current_session_id = res.session_id
                 rospy.loginfo(f"KYR session {res.session_id} opened. State -> ACTIVE")
                 self._publish_arm_start_position()
+                self._publish_teleop_state('get_control')
                 return ReceiveGrantResponse(success=True, message=res.message)
             else:
                 self.session_state = 'FAILED'
@@ -168,11 +175,17 @@ class TeleopNode:
             self.head_tilt_pub.publish(tilt_msg)
 
     def _stop_arm_control(self):
+        self._publish_teleop_state('stop_control')
         self.session_state = 'FINISHED'
         rospy.loginfo('Arm control DISABLED, session FINISHED')
         self._publish_arm_start_position()
         self._reset_head_to_base()
         self._reset_grippers()
+
+    def _publish_teleop_state(self, data):
+        """Operator feedback: X→get_control, Y→stop_control (after KYR/session actions)."""
+        self.teleop_state_pub.publish(String(data=data))
+        rospy.loginfo('Published /teleop_state: %s', data)
 
     def _publish_arm_start_position(self):
         msg = build_arm_start_positions_msg(self.config, duration=0.1)

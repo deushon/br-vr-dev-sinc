@@ -96,6 +96,7 @@
     │   - X/Y enable      │   /quest/joints
     │   - head            │
     │   - bus_servo       │
+    │   - /teleop_state   │   operator sync (String)
     └──────────┬──────────┘
               │
               ▼
@@ -121,6 +122,10 @@
 | 6     | `fast_ik_node`                     | IK → joint values → servo positions        |
 | 7     | `/teleop_fetch/arm_servo_targets`  | SetBusServosPosition                       |
 | 8     | `teleop_fetch`                     | requests `KYR`, forwards to `/kyr/bus_servo_in` when ACTIVE |
+
+### Operator sync (двусторонняя связь)
+
+После того как цепочка **X → grant → KYR `open_session`** переводит сессию в **ACTIVE**, `teleop_fetch` публикует в **`/teleop_state`** (`std_msgs/String`) значение **`get_control`**. При завершении управления (**Y → `end_session` / остановка рук**) — **`stop_control`**. Топик задаётся параметром `~teleop_state_topic` (по умолчанию `/teleop_state`). Подписчик на стороне телеоператора использует это как подтверждение фактического начала и конца управления роботом.
 
 ### Calibration (R_A)
 

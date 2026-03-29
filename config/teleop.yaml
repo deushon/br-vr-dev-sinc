@@ -65,3 +65,6 @@ servo_topic: "/ros_robot_controller/bus_servo/set_position"
 
 # Internal topic from fast_ik_node (arm_servo_targets)
 arm_servo_targets_topic: "/teleop_fetch/arm_servo_targets"
+
+# Operator sync: std_msgs/String — "get_control" after session ACTIVE (X path), "stop_control" on end (Y path)
+teleop_state_topic: "/teleop_state"

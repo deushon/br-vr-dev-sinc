@@ -41,3 +41,7 @@ catkin_install_python(PROGRAMS
 install(DIRECTORY config/ launch/ web/
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
+
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_nosetests(tests/test_teleop_state_contract.py)
+endif()

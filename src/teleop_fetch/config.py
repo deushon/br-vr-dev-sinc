@@ -65,5 +65,6 @@ def load_config():
     # Output
     config['servo_topic'] = p('servo_topic', '/ros_robot_controller/bus_servo/set_position')
     config['arm_servo_targets_topic'] = p('arm_servo_targets_topic', '/teleop_fetch/arm_servo_targets')
+    config['teleop_state_topic'] = p('teleop_state_topic', '/teleop_state')
 
     return config
