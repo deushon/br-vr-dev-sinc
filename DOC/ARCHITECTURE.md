@@ -129,10 +129,10 @@
 
 | Топик | Тип | Кто публикует | Смысл |
 |-------|-----|---------------|--------|
-| `/teleop_state` | `std_msgs/String` | `teleop_fetch` | События сессии: **`get_control`** сразу после успешного **`/kyr/open_session`** (сессия **ACTIVE**, можно слать сервы через прокси); **`stop_control`** при **`end_session`** / снятии управления. Паблишер **с latch**, чтобы поздние подписчики (rosbridge) всё равно получили последнее значение. |
+| `/teleop_state` | `std_msgs/String` | `teleop_fetch` | После KYR **ACTIVE**: **`get_control`** по **фронту L_X** на `~vr_input/joints_topic` (обычно `/quest/joints`); **`stop_control`** по **L_Y** (снятие стрима, сессия KYR остаётся ACTIVE) или при **`end_session`**. Пока L_X не нажали, руки/голова на сервы не стримятся (только стартовая поза при открытии сессии). Паблишер **latched**. |
 | `/teleop_fetch/teleop_state` | `ainex_interfaces/TeleopState` | `fast_ik_node` | Поток статуса IK (ok / out_of_bounds / errors), публикуется в цикле обработки поз; **не** заменяет `/teleop_state`. |
 
-Цепочка RAID: эскалация → грант → `teleop_fetch/receive_grant` → KYR `open_session` → **ACTIVE** → одна публикация **`get_control`**. Отдельное нажатие X на шлеме для этого сообщения не требуется (X в доках — устаревшая привязка к старому UX).
+Цепочка: RAID → грант → `receive_grant` → **`open_session`** → **ACTIVE** → оператор жмёт **L_X** → **`get_control`** + стрим `arm_servo_targets` и головы. **R_A** (калибровка) по-прежнему в **`vr_remapper`**, не в `teleop_node`.
 
 ### Calibration (R_A)
 

@@ -8,7 +8,7 @@
 
 Репозиторий с телеоперацией с Quest VR для двурукого робота (ROS 1 Noetic). Главный пакет: **`teleop_fetch`** — единая публикация команд рук в **`/kyr/bus_servo_in`** → KYR proxy → `/bus_servo/set_position`. Поток данных:
 
-`Quest` → `vr_remapper` → `pose_source` → `fast_ik` (`my_package`) → `teleop_fetch` → KYR. Обратная связь: **`/teleop_state`** (String, latched: `get_control` / `stop_control`) и **`/teleop_fetch/teleop_state`** (TeleopState от fast_ik).
+`Quest` → `vr_remapper` (в т.ч. **R_A** калибровка) → `pose_source` → `fast_ik` → `teleop_fetch` → KYR. Старт стрима рук/головы: **L_X** на joints; стоп стрима: **L_Y**. **`/teleop_state`**: `get_control` / `stop_control`; **`/teleop_fetch/teleop_state`** — IK от fast_ik.
 
 Полный стек по умолчанию: `roslaunch br_bringup ecosystem.launch` (включает `teleop.launch`). Только KYR-шлюз без IK: `with_vr_pipeline:=false`.
 

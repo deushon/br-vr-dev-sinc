@@ -36,6 +36,10 @@ from teleop_fetch.start_stop_controller import (
     build_arm_start_positions_msg,
     build_reset_grippers_msg,
 )
+from teleop_fetch.operator_buttons import rising_edge
+
+# Quest left controller: L_X = start streaming, L_Y = stop (joints on ~vr_input/joints_topic)
+_BUTTON_THRESH = 0.5
 
 
 class TeleopNode:
@@ -48,6 +52,12 @@ class TeleopNode:
 
         # VR data cache
         self.vr_data = VRData()
+
+        # After KYR ACTIVE: wait for L_X before forwarding arms / head; L_Y disarms (session stays ACTIVE).
+        self.operator_armed = False
+        self._prev_lx = 0.0
+        self._prev_ly = 0.0
+        self._xy_edges_need_sync = True
 
         # Publishers - now point to KYR proxy topics to ensure authorization
         self.servo_pub = rospy.Publisher(
@@ -120,8 +130,12 @@ class TeleopNode:
                 self.session_state = 'ACTIVE'
                 self.current_session_id = res.session_id
                 rospy.loginfo(f"KYR session {res.session_id} opened. State -> ACTIVE")
+                self.operator_armed = False
+                self._xy_edges_need_sync = True
                 self._publish_arm_start_position()
-                self._publish_teleop_state('get_control')
+                rospy.loginfo(
+                    'Session ACTIVE: press L_X (Quest) to arm teleop; L_Y to disarm. /teleop_state: get_control on X.'
+                )
                 return ReceiveGrantResponse(success=True, message=res.message)
             else:
                 self.session_state = 'FAILED'
@@ -157,12 +171,34 @@ class TeleopNode:
         self.vr_data.left_hand_pose = data.left_hand_pose
         self.vr_data.right_hand_pose = data.right_hand_pose
 
-        if self.session_state == 'ACTIVE':
+        if self.session_state == 'ACTIVE' and self.operator_armed:
             self._process_head_control()
 
     def _joints_callback(self, msg):
         joint_dict = joint_state_to_dict(msg)
         update_vr_data_from_joints(self.vr_data, joint_dict)
+        self._process_operator_xy_buttons()
+
+    def _process_operator_xy_buttons(self):
+        if self.session_state != 'ACTIVE':
+            return
+        lx = self.vr_data.left_x
+        ly = self.vr_data.left_y
+        if self._xy_edges_need_sync:
+            self._prev_lx = lx
+            self._prev_ly = ly
+            self._xy_edges_need_sync = False
+            return
+        y_edge = rising_edge(self._prev_ly, ly, _BUTTON_THRESH)
+        x_edge = rising_edge(self._prev_lx, lx, _BUTTON_THRESH)
+        self._prev_lx = lx
+        self._prev_ly = ly
+        if y_edge and self.operator_armed:
+            self._operator_y_disarm()
+        elif x_edge and not self.operator_armed:
+            self.operator_armed = True
+            self._publish_teleop_state('get_control')
+            rospy.loginfo('L_X: operator armed — streaming arms/head to robot')
 
     def _process_head_control(self):
         pan, tilt = compute_head_targets(
@@ -177,6 +213,8 @@ class TeleopNode:
             self.head_tilt_pub.publish(tilt_msg)
 
     def _stop_arm_control(self):
+        self.operator_armed = False
+        self._xy_edges_need_sync = True
         self._publish_teleop_state('stop_control')
         self.session_state = 'FINISHED'
         rospy.loginfo('Arm control DISABLED, session FINISHED')
@@ -184,8 +222,18 @@ class TeleopNode:
         self._reset_head_to_base()
         self._reset_grippers()
 
+    def _operator_y_disarm(self):
+        """L_Y: stop streaming; KYR session remains ACTIVE (press L_X again to resume)."""
+        self.operator_armed = False
+        self._xy_edges_need_sync = True
+        self._publish_teleop_state('stop_control')
+        self._publish_arm_start_position()
+        self._reset_head_to_base()
+        self._reset_grippers()
+        rospy.loginfo('L_Y: operator disarmed (session still ACTIVE)')
+
     def _publish_teleop_state(self, data):
-        """Operator feedback: X→get_control, Y→stop_control (after KYR/session actions)."""
+        """Operator feedback: L_X→get_control, L_Y or end_session→stop_control."""
         self.teleop_state_pub.publish(String(data=data))
         rospy.loginfo('Published /teleop_state: %s', data)
 
@@ -207,8 +255,8 @@ class TeleopNode:
         rospy.loginfo('Grippers reset')
 
     def _arm_targets_callback(self, msg):
-        """Forward arm targets from fast_ik to KYR proxy when controlling."""
-        if self.session_state != 'ACTIVE':
+        """Forward arm targets from fast_ik to KYR proxy when session armed (L_X)."""
+        if self.session_state != 'ACTIVE' or not self.operator_armed:
             return
         self.servo_pub.publish(msg)
 

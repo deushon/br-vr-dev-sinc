@@ -1,6 +1,8 @@
 """
-Start/Stop controller: X = enable, Y = disable.
-set_arms_to_start_position, reset_head_to_base, reset_grippers.
+Message builders for arm start pose and gripper reset.
+
+Старт/стоп стриминга рук и публикация /teleop_state (get_control / stop_control)
+обрабатываются в teleop_node.py по фронтам L_X / L_Y на топике joints (см. vr_adapter.VRData).
 """
 
 from ros_robot_controller.msg import SetBusServosPosition, BusServoPosition
