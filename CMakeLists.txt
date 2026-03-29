@@ -6,14 +6,27 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
   std_msgs
+  std_srvs
+  message_generation
   ainex_interfaces
   ros_robot_controller
 )
 
+add_service_files(
+  FILES
+  ReceiveGrant.srv
+  EndSession.srv
+)
+
 catkin_python_setup()
 
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+)
+
 catkin_package(
-  CATKIN_DEPENDS rospy geometry_msgs sensor_msgs std_msgs ainex_interfaces ros_robot_controller
+  CATKIN_DEPENDS rospy geometry_msgs sensor_msgs std_msgs std_srvs message_runtime ainex_interfaces ros_robot_controller
 )
 
 include_directories(${catkin_INCLUDE_DIRS})

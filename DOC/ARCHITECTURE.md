@@ -120,7 +120,7 @@
 | 5     | `/teleop_fetch/poses`              | PoseArray in body_link                     |
 | 6     | `fast_ik_node`                     | IK → joint values → servo positions        |
 | 7     | `/teleop_fetch/arm_servo_targets`  | SetBusServosPosition                       |
-| 8     | `teleop_fetch`                     | forwards to bus_servo when X = enable      |
+| 8     | `teleop_fetch`                     | requests `KYR`, forwards to `/kyr/bus_servo_in` when ACTIVE |
 
 ### Calibration (R_A)
 

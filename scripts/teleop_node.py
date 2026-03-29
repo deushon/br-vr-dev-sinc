@@ -10,6 +10,16 @@ from sensor_msgs.msg import JointState
 from ainex_interfaces.msg import HeadState
 from ros_robot_controller.msg import SetBusServosPosition
 
+# Dynamic imports to handle potential missing message types before they are built
+try:
+    from teleop_fetch.srv import ReceiveGrant, ReceiveGrantResponse, EndSession, EndSessionResponse
+except ImportError:
+    pass
+try:
+    from KYR.srv import OpenSession, CloseSession
+except ImportError:
+    pass
+
 from teleop_fetch.config import load_config
 from teleop_fetch.vr_adapter import (
     VRData,
@@ -32,17 +42,15 @@ class TeleopNode:
         rospy.init_node('teleop_fetch', anonymous=False)
         self.config = load_config()
 
-        # State: 'idle' or 'controlling'
-        self.arm_control_state = 'idle'
-        self.button_left_x_pressed = False
-        self.button_left_y_pressed = False
+        # State machine: IDLE, REQUESTED, PENDING_GRANT, ACTIVE, FINISHED, FAILED
+        self.session_state = 'IDLE'
 
         # VR data cache
         self.vr_data = VRData()
 
-        # Publishers - single point for bus_servo
+        # Publishers - now point to KYR proxy topics to ensure authorization
         self.servo_pub = rospy.Publisher(
-            self.config['servo_topic'],
+            "/kyr/bus_servo_in",
             SetBusServosPosition,
             queue_size=1,
         )
@@ -77,9 +85,61 @@ class TeleopNode:
             queue_size=10,
         )
 
-        # Initial: set arms to start position
-        self._publish_arm_start_position()
-        rospy.loginfo('teleop_fetch initialized, state=idle. X=enable, Y=disable')
+        # Services for lifecycle
+        try:
+            rospy.Service('~receive_grant', ReceiveGrant, self._handle_receive_grant)
+            rospy.Service('~end_session', EndSession, self._handle_end_session)
+        except NameError:
+            rospy.logwarn("teleop_fetch services not available. Run catkin_make and source first.")
+
+        # KYR Clients
+        self.kyr_open_session = rospy.ServiceProxy('/kyr/open_session', OpenSession)
+        self.kyr_close_session = rospy.ServiceProxy('/kyr/close_session', CloseSession)
+
+        rospy.loginfo('teleop_fetch initialized, session_state=IDLE.')
+
+    def _handle_receive_grant(self, req):
+        if self.session_state in ['ACTIVE', 'PENDING_GRANT']:
+            return ReceiveGrantResponse(success=False, message="Session already active or pending")
+        
+        self.session_state = 'PENDING_GRANT'
+        rospy.loginfo("Received grant, opening session in KYR...")
+        
+        try:
+            rospy.wait_for_service('/kyr/open_session', timeout=2.0)
+            res = self.kyr_open_session(req.grant_payload, req.signature)
+            if res.success:
+                self.session_state = 'ACTIVE'
+                self.current_session_id = res.session_id
+                rospy.loginfo(f"KYR session {res.session_id} opened. State -> ACTIVE")
+                self._publish_arm_start_position()
+                return ReceiveGrantResponse(success=True, message=res.message)
+            else:
+                self.session_state = 'FAILED'
+                rospy.logwarn(f"KYR denied session: {res.message}. State -> FAILED")
+                return ReceiveGrantResponse(success=False, message=res.message)
+        except rospy.ServiceException as e:
+            self.session_state = 'FAILED'
+            msg = f"Failed to call KYR open_session: {e}"
+            rospy.logerr(msg)
+            return ReceiveGrantResponse(success=False, message=msg)
+
+    def _handle_end_session(self, req):
+        if self.session_state != 'ACTIVE':
+            return EndSessionResponse(success=False, message="No active session to end")
+            
+        self._stop_arm_control()
+        
+        try:
+            rospy.wait_for_service('/kyr/close_session', timeout=2.0)
+            res = self.kyr_close_session(self.current_session_id, req.reason)
+            # The receipt processing and post-pay happens in rospy_x402, not here.
+            # Here we just notify KYR.
+            return EndSessionResponse(success=res.success, message=res.message)
+        except rospy.ServiceException as e:
+            msg = f"Failed to call KYR close_session: {e}"
+            rospy.logerr(msg)
+            return EndSessionResponse(success=False, message=msg)
 
     def _pose_callback(self, msg):
         data = pose_array_to_vr_data(msg)
@@ -88,36 +148,12 @@ class TeleopNode:
         self.vr_data.left_hand_pose = data.left_hand_pose
         self.vr_data.right_hand_pose = data.right_hand_pose
 
-        # Head control (always active)
-        self._process_head_control()
-
-        # X/Y buttons for start/stop
-        self._process_xy_buttons()
+        if self.session_state == 'ACTIVE':
+            self._process_head_control()
 
     def _joints_callback(self, msg):
         joint_dict = joint_state_to_dict(msg)
         update_vr_data_from_joints(self.vr_data, joint_dict)
-        self._process_xy_buttons()
-
-    def _process_xy_buttons(self):
-        """X = enable, Y = disable (no calibration for now)."""
-        left_x = self.vr_data.left_x
-        left_y = self.vr_data.left_y
-
-        if left_x > 0.5 and not self.button_left_x_pressed:
-            self.button_left_x_pressed = True
-            if self.arm_control_state == 'idle':
-                self.arm_control_state = 'controlling'
-                rospy.loginfo('Arm control ENABLED (X pressed)')
-        elif left_x <= 0.5:
-            self.button_left_x_pressed = False
-
-        if left_y > 0.5 and not self.button_left_y_pressed:
-            self.button_left_y_pressed = True
-            if self.arm_control_state == 'controlling':
-                self._stop_arm_control()
-        elif left_y <= 0.5:
-            self.button_left_y_pressed = False
 
     def _process_head_control(self):
         pan, tilt = compute_head_targets(
@@ -132,8 +168,8 @@ class TeleopNode:
             self.head_tilt_pub.publish(tilt_msg)
 
     def _stop_arm_control(self):
-        self.arm_control_state = 'idle'
-        rospy.loginfo('Arm control DISABLED (Y pressed)')
+        self.session_state = 'FINISHED'
+        rospy.loginfo('Arm control DISABLED, session FINISHED')
         self._publish_arm_start_position()
         self._reset_head_to_base()
         self._reset_grippers()
@@ -156,8 +192,8 @@ class TeleopNode:
         rospy.loginfo('Grippers reset')
 
     def _arm_targets_callback(self, msg):
-        """Forward arm targets from fast_ik to bus_servo when controlling."""
-        if self.arm_control_state != 'controlling':
+        """Forward arm targets from fast_ik to KYR proxy when controlling."""
+        if self.session_state != 'ACTIVE':
             return
         self.servo_pub.publish(msg)
 
