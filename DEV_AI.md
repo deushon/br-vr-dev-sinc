@@ -6,9 +6,11 @@
 
 ## Назначение
 
-Репозиторий с телеоперацией с Quest VR для двурукого робота (ROS 1 Noetic). Главный пакет: **`teleop_fetch`** — единая публикация в `/ros_robot_controller/bus_servo/set_position`. Поток данных:
+Репозиторий с телеоперацией с Quest VR для двурукого робота (ROS 1 Noetic). Главный пакет: **`teleop_fetch`** — единая публикация команд рук в **`/kyr/bus_servo_in`** → KYR proxy → `/bus_servo/set_position`. Поток данных:
 
-`Quest` → `vr_remapper` (map + calib + scale) → `pose_source` → `fast_ik` (`my_package`) → `teleop_fetch` → `bus_servo`. Обратная связь оператору: `/teleop_state` (`get_control` / `stop_control`).
+`Quest` → `vr_remapper` → `pose_source` → `fast_ik` (`my_package`) → `teleop_fetch` → KYR. Обратная связь: **`/teleop_state`** (String, latched: `get_control` / `stop_control`) и **`/teleop_fetch/teleop_state`** (TeleopState от fast_ik).
+
+Полный стек по умолчанию: `roslaunch br_bringup ecosystem.launch` (включает `teleop.launch`). Только KYR-шлюз без IK: `with_vr_pipeline:=false`.
 
 ## Ключевые пути
 

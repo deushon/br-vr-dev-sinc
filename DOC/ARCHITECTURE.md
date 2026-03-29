@@ -125,7 +125,14 @@
 
 ### Operator sync (двусторонняя связь)
 
-После того как цепочка **X → grant → KYR `open_session`** переводит сессию в **ACTIVE**, `teleop_fetch` публикует в **`/teleop_state`** (`std_msgs/String`) значение **`get_control`**. При завершении управления (**Y → `end_session` / остановка рук**) — **`stop_control`**. Топик задаётся параметром `~teleop_state_topic` (по умолчанию `/teleop_state`). Подписчик на стороне телеоператора использует это как подтверждение фактического начала и конца управления роботом.
+**Два разных топика:**
+
+| Топик | Тип | Кто публикует | Смысл |
+|-------|-----|---------------|--------|
+| `/teleop_state` | `std_msgs/String` | `teleop_fetch` | События сессии: **`get_control`** сразу после успешного **`/kyr/open_session`** (сессия **ACTIVE**, можно слать сервы через прокси); **`stop_control`** при **`end_session`** / снятии управления. Паблишер **с latch**, чтобы поздние подписчики (rosbridge) всё равно получили последнее значение. |
+| `/teleop_fetch/teleop_state` | `ainex_interfaces/TeleopState` | `fast_ik_node` | Поток статуса IK (ok / out_of_bounds / errors), публикуется в цикле обработки поз; **не** заменяет `/teleop_state`. |
+
+Цепочка RAID: эскалация → грант → `teleop_fetch/receive_grant` → KYR `open_session` → **ACTIVE** → одна публикация **`get_control`**. Отдельное нажатие X на шлеме для этого сообщения не требуется (X в доках — устаревшая привязка к старому UX).
 
 ### Calibration (R_A)
 

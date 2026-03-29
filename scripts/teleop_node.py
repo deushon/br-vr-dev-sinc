@@ -65,10 +65,12 @@ class TeleopNode:
             HeadState,
             queue_size=1,
         )
+        # Latched so operators (rosbridge / late subscribers) still see get_control after connect.
         self.teleop_state_pub = rospy.Publisher(
             self.config['teleop_state_topic'],
             String,
             queue_size=1,
+            latch=True,
         )
 
         # Subscribers
