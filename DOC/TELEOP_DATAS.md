@@ -3,7 +3,7 @@
 Implemented in `teleop_fetch`:
 
 - ROS recorder control topic: `/record_sessions` (`dataset_recorder_node.py`)
-- Upload API endpoint: `POST /upload_dataset` on port `9191` (`dataset_upload_server.py`)
+- Upload API endpoint: `POST /upload_dataset` on port `9191` (`dataset_upload_server.py`). **Remote operators (RAID):** use `https://<raid>/api/teleop/robots/<robotId>/dataset/upload_dataset` — see [RAID_APP_DATASET_PROXY_SPEC.md](RAID_APP_DATASET_PROXY_SPEC.md).
 - Session binding logic: upload payload is attached to existing `recordId` session and persisted into `.hbr/operator/*`
 
 ---

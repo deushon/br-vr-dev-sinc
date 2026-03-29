@@ -172,12 +172,14 @@
 
 ## 6. Dataset recording architecture (v1)
 
+When the operator uses **RAID** (remote teleop), they do not call `http://<robot>:9191` directly. Dataset HTTP is exposed on RAID as a **reverse proxy** to the same server on the robot. See [RAID_APP_DATASET_PROXY_SPEC.md](RAID_APP_DATASET_PROXY_SPEC.md) for the contract (`/api/teleop/robots/<robotId>/dataset/...`). On LAN (lab), Quest may still use `:9191` directly.
+
 ```mermaid
 flowchart LR
 quest[QuestHeadset] -->|/record_sessions startStop| recorder[dataset_recorder_node]
 quest -->|/quest/poses /quest/joints| teleopFlow[TeleopFlow]
 robotSensors[RobotSensors camera imu joints] --> recorder
-quest -->|POST /upload_dataset :9191| uploadApi[dataset_upload_server]
+quest -->|POST upload_dataset via RAID proxy or :9191| uploadApi[dataset_upload_server]
 uploadApi --> inbox[upload_inbox_dir]
 inbox --> recorder
 recorder --> hbr[datasetId.hbr]
@@ -189,6 +191,6 @@ hbr --> dataNode[DATA_NODE]
 - Keep exactly one active dataset recording at a time.
 - Capture robot data with high-rate in-memory buffering.
 - Finalize robot-side `.hbr` structure on stop event.
-- Attach headset operator payload when `POST /upload_dataset` is received.
+- Attach headset operator payload when `POST /upload_dataset` is received (path on robot unchanged; operator URL may be RAID-prefixed).
 - Produce `metadata.json` and `lerobot_manifest/*` for downstream conversion.
 - Auto-push to DATA_NODE via `POST /sessions/upload` (multipart, see `DATA_NODE/ROBOT_SERVICE_INTEGRATION.md`).

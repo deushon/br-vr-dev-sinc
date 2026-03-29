@@ -517,10 +517,15 @@ class EpisodeRecorder:
 
 Simple HTTP endpoint to receive VR operator data for a finished recording.
 
+**Teleop through RAID:** the operator client should call the RAID reverse proxy, not the robot IP directly:
+
+- `https://<raid-host>/api/teleop/robots/<robotId>/dataset/upload_dataset` (JWT required on RAID). Full contract: [RAID_APP_DATASET_PROXY_SPEC.md](RAID_APP_DATASET_PROXY_SPEC.md).
+
 ### 11.1 Request
 
 - Method: `POST`
-- URL: `http://<robot-ip>:9191/upload_dataset`
+- URL (LAN): `http://<robot-ip>:9191/upload_dataset`
+- URL (via RAID): `https://<raid-host>/api/teleop/robots/<robotId>/dataset/upload_dataset`
 - Content-Type: `application/json`
 
 Body example:

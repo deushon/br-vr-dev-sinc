@@ -37,6 +37,11 @@ upload_api:
   port: 9191
   path: "/upload_dataset"
 
+# Optional: base URL for operator clients (Quest / web) when teleop goes through RAID.
+# Not consumed by recorder nodes today; use as a single place to document the template.
+# Placeholder {robotId} is replaced by the client. Full contract: DOC/RAID_APP_DATASET_PROXY_SPEC.md
+# operator_dataset_base_url: "https://<raid-host>/api/teleop/robots/{robotId}/dataset"
+
 # Automatic push to DATA_NODE after upload payload is applied.
 auto_push:
   enabled: true
