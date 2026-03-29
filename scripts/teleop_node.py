@@ -53,7 +53,7 @@ class TeleopNode:
         # VR data cache
         self.vr_data = VRData()
 
-        # After KYR ACTIVE: wait for L_X before forwarding arms / head; L_Y disarms (session stays ACTIVE).
+        # After KYR ACTIVE: head tracks VR immediately; L_X arms only arm streaming to KYR; L_Y disarms arms + head home.
         self.operator_armed = False
         self._prev_lx = 0.0
         self._prev_ly = 0.0
@@ -75,13 +75,14 @@ class TeleopNode:
             HeadState,
             queue_size=1,
         )
-        # Latched so operators (rosbridge / late subscribers) still see get_control after connect.
+        # Latched: operator logs default to stop_control until L_X arms arm streaming (get_control).
         self.teleop_state_pub = rospy.Publisher(
             self.config['teleop_state_topic'],
             String,
             queue_size=1,
             latch=True,
         )
+        self._publish_teleop_state('stop_control')
 
         # Subscribers
         rospy.Subscriber(
@@ -133,8 +134,9 @@ class TeleopNode:
                 self.operator_armed = False
                 self._xy_edges_need_sync = True
                 self._publish_arm_start_position()
+                self._publish_teleop_state('stop_control')
                 rospy.loginfo(
-                    'Session ACTIVE: press L_X (Quest) to arm teleop; L_Y to disarm. /teleop_state: get_control on X.'
+                    'Session ACTIVE: head free; L_X arms arms (get_control); L_Y disarms if armed (stop_control).'
                 )
                 return ReceiveGrantResponse(success=True, message=res.message)
             else:
@@ -171,7 +173,7 @@ class TeleopNode:
         self.vr_data.left_hand_pose = data.left_hand_pose
         self.vr_data.right_hand_pose = data.right_hand_pose
 
-        if self.session_state == 'ACTIVE' and self.operator_armed:
+        if self.session_state == 'ACTIVE':
             self._process_head_control()
 
     def _joints_callback(self, msg):
@@ -198,7 +200,7 @@ class TeleopNode:
         elif x_edge and not self.operator_armed:
             self.operator_armed = True
             self._publish_teleop_state('get_control')
-            rospy.loginfo('L_X: operator armed — streaming arms/head to robot')
+            rospy.loginfo('L_X: operator armed — streaming arms to robot (/teleop_state: get_control)')
 
     def _process_head_control(self):
         pan, tilt = compute_head_targets(
@@ -233,7 +235,7 @@ class TeleopNode:
         rospy.loginfo('L_Y: operator disarmed (session still ACTIVE)')
 
     def _publish_teleop_state(self, data):
-        """Operator feedback: L_X→get_control, L_Y or end_session→stop_control."""
+        """Latched operator log: boot+ACTIVE→stop_control; L_X→get_control; L_Y if armed or end_session→stop_control."""
         self.teleop_state_pub.publish(String(data=data))
         rospy.loginfo('Published /teleop_state: %s', data)
 

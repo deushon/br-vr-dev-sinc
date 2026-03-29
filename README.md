@@ -82,7 +82,7 @@ roslaunch teleop_fetch teleop_debug.launch
 - `/teleop_fetch/poses` (`PoseArray`) - merged poses (VR/manual)
 - `/teleop_fetch/scale` (`Float64`) - sensitivity 0.0001..100 from UI
 - `/teleop_fetch/arm_servo_targets` (`SetBusServosPosition`) - IK outputs from `fast_ik_node`
-- `/teleop_state` (`std_msgs/String`, **latched**) — после KYR **ACTIVE**: `get_control` при нажатии **L_X** на `/quest/joints`; `stop_control` при **L_Y** (стрим остановлен, сессия может остаться активной) или `end_session`. IK-статус: `/teleop_fetch/teleop_state`. Remap: `~teleop_state_topic`, джойнты: `~vr_input/joints_topic`
+- `/teleop_state` (**latched**): при старте ноды и при **ACTIVE** после гранта — `stop_control`; `get_control` по **L_X** (если руки ещё не armed); `stop_control` по **L_Y** только если руки были armed, либо при `end_session`. Голова при ACTIVE без L_X; руки на KYR только после L_X. IK: `/teleop_fetch/teleop_state`. Remap: `~teleop_state_topic`, joints: `~vr_input/joints_topic`
 - `/record_sessions` (`std_msgs/String(JSON)`) - dataset lifecycle events
 
 ## Code structure

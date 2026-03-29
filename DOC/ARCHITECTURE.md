@@ -129,7 +129,7 @@
 
 | Топик | Тип | Кто публикует | Смысл |
 |-------|-----|---------------|--------|
-| `/teleop_state` | `std_msgs/String` | `teleop_fetch` | После KYR **ACTIVE**: **`get_control`** по **фронту L_X** на `~vr_input/joints_topic` (обычно `/quest/joints`); **`stop_control`** по **L_Y** (снятие стрима, сессия KYR остаётся ACTIVE) или при **`end_session`**. Пока L_X не нажали, руки/голова на сервы не стримятся (только стартовая поза при открытии сессии). Паблишер **latched**. |
+| `/teleop_state` | `std_msgs/String` | `teleop_fetch` | При **старте ноды** и при переходе в **ACTIVE** после гранта — **`stop_control`** (обратная связь: руки ещё не в «режиме управления»). **`get_control`** — по **фронту L_X**, если до этого руки не были armed. **`stop_control`** — по **L_Y**, только если управление руками было разрешено (armed), либо при **`end_session`**. **Голова** при ACTIVE управляется сразу; **руки** на KYR только после L_X. Паблишер **latched**. |
 | `/teleop_fetch/teleop_state` | `ainex_interfaces/TeleopState` | `fast_ik_node` | Поток статуса IK (ok / out_of_bounds / errors), публикуется в цикле обработки поз; **не** заменяет `/teleop_state`. |
 
 Цепочка: RAID → грант → `receive_grant` → **`open_session`** → **ACTIVE** → оператор жмёт **L_X** → **`get_control`** + стрим `arm_servo_targets` и головы. **R_A** (калибровка) по-прежнему в **`vr_remapper`**, не в `teleop_node`.
