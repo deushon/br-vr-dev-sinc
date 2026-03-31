@@ -22,7 +22,7 @@
 
 ## Документация
 
-Индекс: [DOC/README.md](DOC/README.md). Обязательно читать [DOC/ARCHITECTURE.md](DOC/ARCHITECTURE.md) и [DOC/PROJECT_STATE.md](DOC/PROJECT_STATE.md). Баги и долг: [DOC/TODO.md](DOC/TODO.md).
+Индекс: [DOC/README.md](DOC/README.md). Обязательно читать [DOC/ARCHITECTURE.md](DOC/ARCHITECTURE.md) и [DOC/PROJECT_STATE.md](DOC/PROJECT_STATE.md). Баги и долг: [DOC/TODO.md](DOC/TODO.md). Спринт vs VR/датасеты: [DOC/SPRINT_STATUS_ROS_WORKSPACE.md](DOC/SPRINT_STATUS_ROS_WORKSPACE.md).
 
 ## Обязанности при правках
 
