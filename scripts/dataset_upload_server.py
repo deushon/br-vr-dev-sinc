@@ -474,6 +474,15 @@ class UploadHandler(BaseHTTPRequestHandler):
             )
             parts.append(json.dumps(session_meta, ensure_ascii=True).encode("utf-8"))
             parts.append(b"\r\n")
+        peaq_claim = metadata.get("peaqClaim")
+        if isinstance(peaq_claim, dict) and peaq_claim:
+            parts.append(("--%s\r\n" % boundary).encode("utf-8"))
+            parts.append(
+                b'Content-Disposition: form-data; name="peaqClaim"\r\n'
+                b"Content-Type: application/json\r\n\r\n"
+            )
+            parts.append(json.dumps(peaq_claim, ensure_ascii=True).encode("utf-8"))
+            parts.append(b"\r\n")
         parts.append(("--%s\r\n" % boundary).encode("utf-8"))
         parts.append(
             ('Content-Disposition: form-data; name="file"; filename="%s.hbr.tar.gz"\r\n' % dataset_id).encode("utf-8")

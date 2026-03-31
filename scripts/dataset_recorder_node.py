@@ -18,6 +18,7 @@ from typing import Any, Dict
 import rospy
 from std_msgs.msg import String
 
+from teleop_fetch.srv import SetPeaqDatasetClaim
 from teleop_fetch.episode_recorder import DatasetSessionManager
 from teleop_fetch.sensors.ros_camera import ROSCamera
 from teleop_fetch.sensors.ros_imu import ROSIMU
@@ -110,6 +111,11 @@ class DatasetRecorderNode:
             queue_size=100,
         )
         self._poll_timer = rospy.Timer(rospy.Duration(1.0), self._poll_upload_inbox)
+        rospy.Service(
+            "/teleop_fetch/set_peaq_dataset_claim",
+            SetPeaqDatasetClaim,
+            self._handle_set_peaq_dataset_claim,
+        )
         rospy.loginfo("dataset_recorder ready: topic=%s", self.config["record_sessions_topic"])
         self._append_log("node_started", {"topic": self.config["record_sessions_topic"]})
         self._write_state_file()
@@ -136,6 +142,71 @@ class DatasetRecorderNode:
             os.replace(tmp, self._state_file)
         except OSError:
             pass
+
+    def _active_dataset_id_from_state_file(self) -> str:
+        if not os.path.exists(self._state_file):
+            return ""
+        try:
+            with open(self._state_file, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            active = str(state.get("activeDatasetId") or "").strip()
+            if active:
+                return active
+            known = state.get("knownDatasetIds") or []
+            if isinstance(known, list) and len(known) == 1:
+                return str(known[0])
+        except (OSError, json.JSONDecodeError, TypeError):
+            return ""
+        return ""
+
+    def _handle_set_peaq_dataset_claim(self, req):
+        """Merge peaq claim into metadata.json under key peaqClaim (DOC/DATA_NODE_PEAQ_CLAIM_SPEC)."""
+        dataset_id = (req.dataset_id or "").strip()
+        if not dataset_id:
+            dataset_id = self._active_dataset_id_from_state_file()
+        if not dataset_id:
+            return {
+                "success": False,
+                "message": "dataset_id empty and no active dataset in session_state",
+            }
+        raw = (req.claim_json or "").strip()
+        if not raw:
+            return {"success": False, "message": "claim_json is empty"}
+        try:
+            claim_obj = json.loads(raw)
+            if not isinstance(claim_obj, dict):
+                return {
+                    "success": False,
+                    "message": "claim_json must be a JSON object",
+                }
+        except json.JSONDecodeError as e:
+            return {"success": False, "message": "invalid JSON: %s" % e}
+
+        root = os.path.join(self.config["output_root"], "%s.hbr" % dataset_id)
+        meta_path = os.path.join(root, "metadata.json")
+        if not os.path.isdir(root):
+            return {
+                "success": False,
+                "message": "dataset directory not found: %s" % dataset_id,
+            }
+        meta = {}
+        if os.path.isfile(meta_path):
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                meta = {}
+        meta["peaqClaim"] = claim_obj
+        try:
+            tmp = meta_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(meta, f, indent=2, ensure_ascii=True)
+                f.write("\n")
+            os.replace(tmp, meta_path)
+        except OSError as e:
+            return {"success": False, "message": str(e)}
+        self._append_log("peaq_claim_merged", {"datasetId": dataset_id})
+        return {"success": True, "message": "ok"}
 
     def _auto_push_dataset(self, dataset_id: str) -> None:
         cfg = self.config.get("auto_push", {})

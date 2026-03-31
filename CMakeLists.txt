@@ -16,6 +16,7 @@ add_service_files(
   FILES
   ReceiveGrant.srv
   EndSession.srv
+  SetPeaqDatasetClaim.srv
 )
 
 catkin_python_setup()
