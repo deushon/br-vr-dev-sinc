@@ -22,7 +22,7 @@ If the part is **absent**, behavior is unchanged (backward compatible).
 
 ## 2. Processing expectations
 
-1. Parse multipart; if `peaqClaim` is present, validate JSON and store with the session/dataset record (DB column, JSONB, or sidecar metadata).
+1. Parse multipart; if `peaqClaim` is present, validate JSON and store with the session/dataset record (DB column, JSONB, or sidecar metadata). If the robot never received a claim from RAID (Peaq issuance blocked, `claim_not_ready`, etc.), the part may be absent — same as today’s robot behavior; see [PEAQ_RAID_CLAIM.md](../../rospy_x402/DOC/PEAQ_RAID_CLAIM.md) § Operational status.
 2. Index optional fields for search: e.g. `help_request_id`, `network`, `document.id` (if DID-shaped).
 3. Do **not** require `peaqClaim` for acceptance of the upload.
 

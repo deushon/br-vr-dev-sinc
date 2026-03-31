@@ -86,10 +86,11 @@ Minimal interoperable object (extend as needed):
 | Code | Body | Meaning |
 |------|------|---------|
 | 200 | `{ "peaq_claim": { … } }` или `{ "peaqClaim": { … } }` | Claim ready. |
+| 200 | `{ "error": "claim_not_ready" }` (no claim object) | Issuance not finished or blocked upstream (e.g. Peaq wallet/funding). Robot treats as “no claim yet”, same as empty outcome after polls; **fail-open** on robot. |
 | 404 | `{ "error": "claim_not_ready" }` (optional) | Not ready yet; robot may retry. |
 | 401 | — | Invalid secret. |
 
-**Polling:** Robot implementation may retry 404 up to ~3 times with ~1 s delay (configurable).
+**Polling:** Robot implementation may retry **404** up to ~3 times with ~1 s delay (configurable). Implementations that return **200** + `claim_not_ready` without a claim object are handled in one shot (no claim merged until a later successful response includes `peaq_claim` / `peaqClaim`).
 
 ---
 
