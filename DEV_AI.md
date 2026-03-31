@@ -16,6 +16,7 @@
 
 ## Ключевые пути
 
+- `.gitignore` — Python-кэш (`__pycache__/`, `*.pyc`), venv, `.env`, кэши pytest/mypy, IDE; bytecode в репозиторий не коммитить.
 - `teleop_fetch/` — `vr_remapper_node.py`, `pose_source_node.py`, `teleop_node.py`, `config/vr_remapper.yaml`, датасеты `.hbr`.
 - `my_package/` — `fast_ik_node.cpp`, `config/fast_ik.yaml`.
 
