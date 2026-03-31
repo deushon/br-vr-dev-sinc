@@ -131,17 +131,42 @@ class TeleopNode:
             self._joint_ly_name,
             self.config['joints_topic'],
         )
+        if CompleteTeleopPayment is None:
+            rospy.logwarn(
+                'teleop_fetch: CompleteTeleopPayment srv not importable — SOL payment after sessions disabled. '
+                'Rebuild catkin with rospy_x402 + teleop_fetch.'
+            )
 
     def _complete_teleop_payment_optional(self, receipt_payload):
         """SOL transfer to operator via rospy_x402 (same wallet as x402_buy_service)."""
+        if CompleteTeleopPayment is None:
+            rospy.logwarn('complete_teleop_payment skipped: rospy_x402.srv not available')
+            return
         try:
             rospy.wait_for_service('/x402/complete_teleop_payment', timeout=5.0)
             proxy = rospy.ServiceProxy('/x402/complete_teleop_payment', CompleteTeleopPayment)
             out = proxy(receipt_payload)
             if out.success:
-                rospy.loginfo('complete_teleop_payment: %s', out.message)
+                sig = (out.payment_signature or '').strip()
+                if not sig:
+                    rospy.logwarn(
+                        'complete_teleop_payment: success but NO on-chain transfer — %s '
+                        '(common cause: grant/receipt still has operator_pubkey pending_from_raid until RAID sends real address)',
+                        out.message,
+                    )
+                elif sig == 'skipped_zero_amount':
+                    rospy.logwarn(
+                        'complete_teleop_payment: zero amount, no transfer — %s',
+                        out.message,
+                    )
+                else:
+                    rospy.loginfo(
+                        'complete_teleop_payment: %s payment_signature=%s',
+                        out.message,
+                        sig,
+                    )
             else:
-                rospy.logwarn('complete_teleop_payment: %s', out.message)
+                rospy.logwarn('complete_teleop_payment failed: %s', out.message)
         except rospy.ROSException as e:
             rospy.logwarn('complete_teleop_payment unavailable (no payment): %s', e)
 
@@ -200,7 +225,7 @@ class TeleopNode:
         try:
             rospy.wait_for_service('/kyr/close_session', timeout=5.0)
             res = self.kyr_close_session(self.current_session_id, reason)
-            if res.success and CompleteTeleopPayment is not None:
+            if res.success:
                 self._complete_teleop_payment_optional(res.receipt_payload)
             return res.success, res.message
         except rospy.ServiceException as e:
