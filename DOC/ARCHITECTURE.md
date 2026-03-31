@@ -121,30 +121,30 @@
 | 5     | `/teleop_fetch/poses`              | PoseArray in body_link                     |
 | 6     | `fast_ik_node`                     | IK → joint values → servo positions        |
 | 7     | `/teleop_fetch/arm_servo_targets`  | SetBusServosPosition                       |
-| 8     | `teleop_fetch`                     | `KYR`, в `/kyr/bus_servo_in` только при **ACTIVE** и **armed** (см. ниже) |
+| 8     | `teleop_fetch`                     | `KYR`, to `/kyr/bus_servo_in` only when **ACTIVE** and **armed** (see below) |
 
-### Operator sync (двусторонняя связь)
+### Operator sync (bidirectional)
 
-**Два разных топика:**
+**Two different topics:**
 
-| Топик | Тип | Кто публикует | Смысл |
-|-------|-----|---------------|--------|
-| `/teleop_state` | `std_msgs/String` | `teleop_fetch` | При **старте ноды** и при **ACTIVE** после гранта — **`stop_control`**. **`get_control`** — по фронту кнопки **`~operator_arm/joint_name_lx`** (по умолчанию `L_X`), если руки ещё не armed; при **`~arm_stream_requires_lx:=false`** — сразу после гранта идёт **`get_control`** и руки armed без кнопки. **`stop_control`** — по **`joint_name_ly`** (по умолч. `L_Y`) если был armed, или **`end_session`**. **Голова** при ACTIVE без ожидания кнопки; **руки** на KYR только в режиме **armed**. Паблишер **latched**. |
-| `/teleop_fetch/teleop_state` | `ainex_interfaces/TeleopState` | `fast_ik_node` | Поток статуса IK (ok / out_of_bounds / errors), публикуется в цикле обработки поз; **не** заменяет `/teleop_state`. |
+| Topic | Type | Publisher | Meaning |
+|-------|------|-----------|---------|
+| `/teleop_state` | `std_msgs/String` | `teleop_fetch` | On **node start** and on **ACTIVE** after grant — **`stop_control`**. **`get_control`** — on rising edge of **`~operator_arm/joint_name_lx`** (default `L_X`) if arms not yet armed; with **`~arm_stream_requires_lx:=false`** — **`get_control`** right after grant and arms armed without a button. **`stop_control`** — on **`joint_name_ly`** (default `L_Y`) if armed, or **`end_session`**. **Head** on ACTIVE without waiting for a button; **arms** to KYR only when **armed**. Publisher is **latched**. |
+| `/teleop_fetch/teleop_state` | `ainex_interfaces/TeleopState` | `fast_ik_node` | IK status stream (ok / out_of_bounds / errors) in the pose processing loop; **does not** replace `/teleop_state`. |
 
-Цепочка: RAID → грант → **`open_session`** → **ACTIVE** → (если `arm_stream_requires_lx`) фронт **L_X** на **`~vr_input/joints_topic`** → **armed** → стрим **`/teleop_fetch/arm_servo_targets`** → **`/kyr/bus_servo_in`**. **R_A** — в **`vr_remapper`**.
+Chain: RAID → grant → **`open_session`** → **ACTIVE** → (if `arm_stream_requires_lx`) **L_X** rising edge on **`~vr_input/joints_topic`** → **armed** → stream **`/teleop_fetch/arm_servo_targets`** → **`/kyr/bus_servo_in`**. **R_A** is in **`vr_remapper`**.
 
-#### Закрытие сессии KYR и оплата оператору (x402)
+#### KYR session close and operator payment (x402)
 
-Грант закрывается только при **`/kyr/close_session`**, который вызывает **`teleop_fetch`** из обработчика **`/teleop_fetch/end_session`** или после **второго нажатия L_Y** (если `~end_session_on_second_ly`, по умолчанию true): первое L_Y лишь снимает arm (**сессия KYR остаётся ACTIVE**), второе L_Y завершает сессию и запускает **`/x402/complete_teleop_payment`**. Для сценария «кнопка в RAID» приложение должно дергать **`/teleop_fetch/end_session`** через rosbridge (тип `teleop_fetch/EndSession`, поле `reason`). Без этого оплата в SOL не выполняется.
+The grant closes only on **`/kyr/close_session`**, invoked by **`teleop_fetch`** from **`/teleop_fetch/end_session`** or after **second L_Y press** (if `~end_session_on_second_ly`, default true): first L_Y only disarms (**KYR session stays ACTIVE**), second L_Y ends the session and triggers **`/x402/complete_teleop_payment`**. For a “button in RAID” flow, the app must call **`/teleop_fetch/end_session`** over rosbridge (type `teleop_fetch/EndSession`, field `reason`). Without that, SOL payment does not run.
 
-#### Почему руки не едут при живом fast_ik
+#### Why arms do not move with fast_ik running
 
-1. **Нет гранта / не ACTIVE** — `teleop_fetch` не шлёт сервы на KYR.
-2. **`arm_stream_requires_lx:=true` (по умолчанию)** — пока не было **нажатия** (фронт >0.5) по имени **`joint_name_lx`**, `arm_servo_targets` **отбрасываются** (в лог раз в 10 с — предупреждение).
-3. **В `JointState` нет нужного имени** — клиент (Quest/rosbridge) шлёт другие `name[]`; задайте **`~operator_arm/joint_name_lx`** под вашу схему или **`~arm_stream_requires_lx:=false`** для стенда без кнопки.
-4. **Нет потока `/quest/joints`** — фронт кнопки не обнаружить; голова может работать от поз, руки — нет до armed.
-5. **KYR proxy** — без открытой сессии или при `check_policy` → deny команды не доходят до `/bus_servo/set_position`.
+1. **No grant / not ACTIVE** — `teleop_fetch` does not send servos to KYR.
+2. **`arm_stream_requires_lx:=true` (default)** — until a **press** (rising edge >0.5) on **`joint_name_lx`**, `arm_servo_targets` are **dropped** (warning to log every ~10 s).
+3. **Wrong name in `JointState`** — Quest/rosbridge sends different `name[]`; set **`~operator_arm/joint_name_lx`** for your layout or **`~arm_stream_requires_lx:=false`** on a bench without the button.
+4. **No `/quest/joints` stream** — button edge cannot be detected; head may work from poses, arms not until armed.
+5. **KYR proxy** — without open session or on `check_policy` deny, commands never reach `/bus_servo/set_position`.
 
 ### Calibration (R_A)
 

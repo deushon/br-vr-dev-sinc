@@ -1,12 +1,12 @@
-# TODO / известные проблемы
+# TODO / known issues
 
-Живая заметка для разработчиков и агентов. Детальный статус компонентов — в [PROJECT_STATE.md](PROJECT_STATE.md).
+Living notes for developers and agents. Component status: [PROJECT_STATE.md](PROJECT_STATE.md).
 
-## Как вести список
+## How to maintain the list
 
-- Вносите воспроизводимые баги, технический долг и идеи рефакторинга кратко (симптом, компонент, приоритет).
-- После исправления — удалите пункт или перенесите в `PROJECT_STATE.md` в раздел истории при необходимости.
+- Add reproducible bugs, tech debt, and refactor ideas briefly (symptom, component, priority).
+- After a fix — remove the item or move history to `PROJECT_STATE.md` if useful.
 
-## Очередь
+## Queue
 
-_(пока пусто — заполняйте по мере работы)_
+_(empty for now — fill as you work)_

@@ -1,29 +1,29 @@
-# VR Teleop (br-vr-dev-sinc) — индекс документации
+# VR Teleop (br-vr-dev-sinc) — documentation index
 
-Вся подробная документация в **`DOC/`**. Корневые [README.md](../README.md) и [DEV_AI.md](../DEV_AI.md) содержат входные точки и ссылки сюда.
+All detailed docs live in **`DOC/`**. Root [README.md](../README.md) and [DEV_AI.md](../DEV_AI.md) are entry points with links here.
 
-## Архитектура стека
+## Stack architecture
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — уровни абстракции, топики, поток Quest → remapper → IK → `teleop_fetch`.
-- Пост-оплата оператору SOL после `close_session`: вызов `/x402/complete_teleop_payment` из `teleop_node` (зависимость `rospy_x402`); спека ответа RAID: [../../rospy_x402/DOC/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](../../rospy_x402/DOC/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md).
+- [ARCHITECTURE.md](ARCHITECTURE.md) — abstraction layers, topics, flow Quest → remapper → IK → `teleop_fetch`.
+- Post-close operator SOL payment: `/x402/complete_teleop_payment` from `teleop_node` (depends on `rospy_x402`); RAID response spec: [../../rospy_x402/DOC/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](../../rospy_x402/DOC/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md).
 
-## Состояние проекта и задачи
+## Project state and tasks
 
-- [PROJECT_STATE.md](PROJECT_STATE.md) — статус пакетов и компонентов.
-- [TODO.md](TODO.md) — известные проблемы и бэклог.
-- [SPRINT_STATUS_ROS_WORKSPACE.md](SPRINT_STATUS_ROS_WORKSPACE.md) — спринтовые семафоры/тесты vs зона teleop_fetch / датасеты / VR pipeline.
-- Публикация репозитория: [../../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md](../../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md).
+- [PROJECT_STATE.md](PROJECT_STATE.md) — package and component status.
+- [TODO.md](TODO.md) — known issues and backlog.
+- [SPRINT_STATUS_ROS_WORKSPACE.md](SPRINT_STATUS_ROS_WORKSPACE.md) — sprint semaphores/tests vs teleop_fetch / datasets / VR pipeline.
+- Public release: [../../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md](../../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md).
 
-## Датасеты и формат HBR
+## Datasets and HBR format
 
-- Локально на роботе: при `enable_dataset_recording` в `teleop.launch` поднимаются REST **:9191** и веб-дашборд **`dataset_web_server`** → `http://<робот>:3002/dataset_dashboard.html` (см. [ARCHITECTURE.md](ARCHITECTURE.md) §6).
-- [TELEOP_DATAS.md](TELEOP_DATAS.md) — события шлема, контракт upload API.
-- [HBR.md](HBR.md) — формат контейнера `.hbr`, хранение.
-- [RAID_APP_DATASET_PROXY_SPEC.md](RAID_APP_DATASET_PROXY_SPEC.md) — спецификация для **RAID App** (`x402_raid_app`): HTTP reverse proxy к dataset API на роботе (`:9191`) для операторов через JWT.
-- [RAID_APP_PEAQ_CLAIM_SPEC.md](RAID_APP_PEAQ_CLAIM_SPEC.md) — **RAID App**: peaq claim на Agung, расширение `teleop/help` и `GET …/peaq/claim`.
-- [DATA_NODE_OPERATOR_SESSION_SPEC.md](DATA_NODE_OPERATOR_SESSION_SPEC.md) — для **DATA_NODE**: расширенные поля сессии телеопа, `metadata.json`, multipart `operatorSessionMeta` при `POST /sessions/upload`.
-- [DATA_NODE_PEAQ_CLAIM_SPEC.md](DATA_NODE_PEAQ_CLAIM_SPEC.md) — **DATA_NODE**: опциональная multipart-часть `peaqClaim` при выгрузке датасета с робота.
+- On the robot: with `enable_dataset_recording` in `teleop.launch`, REST **:9191** and **`dataset_web_server`** start → `http://<robot>:3002/dataset_dashboard.html` (see [ARCHITECTURE.md](ARCHITECTURE.md) §6).
+- [TELEOP_DATAS.md](TELEOP_DATAS.md) — headset events, upload API contract.
+- [HBR.md](HBR.md) — `.hbr` container format, storage.
+- [RAID_APP_DATASET_PROXY_SPEC.md](RAID_APP_DATASET_PROXY_SPEC.md) — **RAID App** (`x402_raid_app`): HTTP reverse proxy to dataset API on robot (`:9191`) for operators via JWT.
+- [RAID_APP_PEAQ_CLAIM_SPEC.md](RAID_APP_PEAQ_CLAIM_SPEC.md) — **RAID App**: peaq claim on Agung, `teleop/help` extension and `GET …/peaq/claim`.
+- [DATA_NODE_OPERATOR_SESSION_SPEC.md](DATA_NODE_OPERATOR_SESSION_SPEC.md) — **DATA_NODE**: extended teleop session fields, `metadata.json`, multipart `operatorSessionMeta` on `POST /sessions/upload`.
+- [DATA_NODE_PEAQ_CLAIM_SPEC.md](DATA_NODE_PEAQ_CLAIM_SPEC.md) — **DATA_NODE**: optional multipart part `peaqClaim` when uploading dataset from robot.
 
 ---
 
-Новые функциональные области оформляйте отдельными файлами в `DOC/` и добавляйте пункт в этот индекс + обновляйте README и DEV_AI при смене контрактов.
+New functional areas → new `DOC/` file + index line here; update README and DEV_AI when contracts change.

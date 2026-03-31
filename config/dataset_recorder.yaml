@@ -45,7 +45,7 @@ upload_api:
 # Automatic push to DATA_NODE after upload payload is applied.
 auto_push:
   enabled: true
-  # Замените на URL вашего DATA_NODE (LAN или localhost для отладки).
+  # Set to your DATA_NODE URL (LAN or localhost for debugging).
   data_node_url: "http://127.0.0.1:8088"
   upload_path: "/sessions/upload"
   retries: 3

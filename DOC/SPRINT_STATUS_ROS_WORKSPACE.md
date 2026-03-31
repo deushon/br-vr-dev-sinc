@@ -1,64 +1,64 @@
-# Спринт: семафоры и тесты — зона ответственности **br-vr-dev-sinc (teleop_fetch, IK, датасеты)**
+# Sprint: semaphores and tests — **br-vr-dev-sinc (teleop_fetch, IK, datasets)** ownership
 
-Состояние на **2026-03-31**. Репозиторий содержит **VR pipeline**, **`teleop_fetch`**, запись **HBR**, **upload** на DATA_NODE (multipart), поля сессии оператора. **Quest / Unity-клиент** для briefing-карточки и RTT preflight в этом git не обязаны быть; проверять по фактическому репо клиента.
+Status as of **2026-03-31**. This repo has the **VR pipeline**, **`teleop_fetch`**, **HBR** recording, **DATA_NODE** upload (multipart), operator session fields. **Quest / Unity client** for briefing card and RTT preflight may live elsewhere; verify in the actual client repo.
 
-## Краткий вывод
+## Summary
 
-| Категория | Комментарий |
-|-----------|-------------|
-| Реализовано | Телеоп через KYR proxy, `teleopControl` / `acceptedAtUtcIso` в upload и `metadata.json`, `operatorSessionMeta`, `sync_rtt_sec` в кадрах HBR, Peaq merge через сервис + `dataset_upload_server` |
-| Частично | «Безопасный handoff»: есть `get_control` / `lost_control` в контракте и gating по **L_X** (`arm_stream_requires_lx`); **нет** явного `TELEOP_READY`, **нет** `teleop_ready_at` / `operator_confirmed_at`, **нет** кнопки «I have control» в этом Python-стеке |
-| Не реализовано | RTT **блокировка** старта сессии при ≥200 мс (в коде есть только запись **sync RTT** в датасет, не gate), pre-connect briefing UI, Cosmos visual_annotation, recovery slice extractor |
-
----
-
-## Семафоры → br-vr-dev-sinc
-
-| # | Deliverable | Роль репозитория | Статус |
-|---|-------------|------------------|--------|
-| 3 | Event↔recording | Датасет, `metadata.json`, upload | **🟡**: `dataset_id` на стороне записи/архива; **`critical_event_ids`** в payload — если заданы Backend/другим узлом, в этом репо не найдены |
-| 4 | `TELEOP_TAKEOVER` авто | Ожидается узел/интеграция, пишущая событие | **Не реализовано** (нет вхождений в Python/C++) |
-| 6 | RTT preflight gate | VR + политика блокировки | **Не реализовано**; см. `sync_rtt_sec` / `syncRttSec` в [HBR.md](HBR.md), [episode_recorder.py](../src/teleop_fetch/episode_recorder.py) — телеметрия, не gate |
-| 7 | `raid_task_id` + `payment_id` | Метаданные сессии | **🟡**: `taskName`, grant/task из RAID цепочки; **явные ключи спринта** в `metadata.json` нужно сверять с контрактом DATA_NODE / Backend |
-| 9 | `TELEOP_READY` | Кинематика / логирование | **Не реализовано** |
-| 10 | Bilateral «I have control» | VR UI + ROS | **Не реализовано** в scripts `teleop_node` (есть только состояния телеопа и L_X/L_Y) |
-| 11 | Pre-connect briefing | VR + Frontend | **Не реализовано** в этом репозитории |
-| 13–20 | Cosmos, recovery, quality, HF, external DB | Backend / ML pipeline | **Н/Д** |
+| Category | Comment |
+|----------|---------|
+| Implemented | Teleop via KYR proxy, `teleopControl` / `acceptedAtUtcIso` in upload and `metadata.json`, `operatorSessionMeta`, `sync_rtt_sec` in HBR frames, Peaq merge via service + `dataset_upload_server` |
+| Partial | “Safe handoff”: `get_control` / `lost_control` in contract and **L_X** gating (`arm_stream_requires_lx`); **no** explicit `TELEOP_READY`, **no** `teleop_ready_at` / `operator_confirmed_at`, **no** “I have control” button in this Python stack |
+| Not implemented | RTT **blocking** session start at ≥200 ms (code only records **sync RTT** in dataset, not a gate), pre-connect briefing UI, Cosmos visual_annotation, recovery slice extractor |
 
 ---
 
-## Тесты спринта → br-vr-dev-sinc
+## Semaphores → br-vr-dev-sinc
 
-| # | Тест | Статус |
+| # | Deliverable | Repo role | Status |
+|---|-------------|-----------|--------|
+| 3 | Event↔recording | Dataset, `metadata.json`, upload | **🟡**: `dataset_id` on record side; **`critical_event_ids`** in payload — if set by Backend/other node, not found here |
+| 4 | `TELEOP_TAKEOVER` auto | Node/integration emitting event | **Not implemented** (no matches in Python/C++) |
+| 6 | RTT preflight gate | VR + blocking policy | **Not implemented**; see `sync_rtt_sec` / `syncRttSec` in [HBR.md](HBR.md), [episode_recorder.py](../src/teleop_fetch/episode_recorder.py) — telemetry, not gate |
+| 7 | `raid_task_id` + `payment_id` | Session metadata | **🟡**: `taskName`, grant/task from RAID chain; **sprint key names** in `metadata.json` — verify vs DATA_NODE / Backend |
+| 9 | `TELEOP_READY` | Kinematics / logging | **Not implemented** |
+| 10 | Bilateral “I have control” | VR UI + ROS | **Not implemented** in `teleop_node` scripts (only teleop states and L_X/L_Y) |
+| 11 | Pre-connect briefing | VR + frontend | **Not implemented** in this repo |
+| 13–20 | Cosmos, recovery, quality, HF, external DB | Backend / ML | **N/A** |
+
+---
+
+## Sprint tests → br-vr-dev-sinc
+
+| # | Test | Status |
 |---|------|--------|
-| 4 | Авто `TELEOP_TAKEOVER` в API | **🔴 FAIL** по коду репозитория (нет генерации) |
-| 6 | RTT ≥200 мс блокирует старт | **🔴 FAIL** (нет gate; есть метрика в записи) |
-| 9 | Safe handoff `TELEOP_READY` → confirm | **🟡 PARTIAL**: упрощённый handoff через кнопки и `teleopControl`; не совпадает со спеком спринта |
-| 10 | `teleop_ready_at` / `operator_confirmed_at` | **🔴 FAIL** (поля не найдены в спецификации `DATA_NODE_OPERATOR_SESSION_SPEC` / upload) |
-| 11 | Briefing card | **Н/Д** (клиент Quest) |
-| 7 | `raid_task_id` / `payment_id` в session | Ручная проверка `.hbr/metadata.json` после RAID-телеопа |
-| 14 | Recovery slice | **Н/Д** (Backend) |
+| 4 | Auto `TELEOP_TAKEOVER` in API | **🔴 FAIL** in repo (no generator) |
+| 6 | RTT ≥200 ms blocks start | **🔴 FAIL** (no gate; metric in recording only) |
+| 9 | Safe handoff `TELEOP_READY` → confirm | **🟡 PARTIAL**: simplified handoff via buttons and `teleopControl`; not full sprint spec |
+| 10 | `teleop_ready_at` / `operator_confirmed_at` | **🔴 FAIL** (fields not in `DATA_NODE_OPERATOR_SESSION_SPEC` / upload) |
+| 11 | Briefing card | **N/A** (Quest client) |
+| 7 | `raid_task_id` / `payment_id` in session | Manual check `.hbr`/`metadata.json` after RAID teleop |
+| 14 | Recovery slice | **N/A** (Backend) |
 
 ---
 
-## Автотесты пакета teleop_fetch
+## teleop_fetch automated tests
 
-Прогон **2026-03-31**:
+Run **2026-03-31**:
 
 ```bash
 cd /home/ubuntu/ros_ws && source devel/setup.bash
 catkin build teleop_fetch --no-status --catkin-make-args run_tests
-# или:
+# or:
 PYTHONPATH=/home/ubuntu/ros_ws/src/br-vr-dev-sinc/src:$PYTHONPATH python3 -m nose /home/ubuntu/ros_ws/src/br-vr-dev-sinc/tests -v
 ```
 
-Результат: **8 tests OK** (`test_upload_payload_session_fields`, `test_teleop_state_contract`, `test_operator_buttons`, …). Они покрывают **контракт upload** (`teleopControl`, `acceptedAtUtcIso`), а **не** спринтовые облачные сценарии.
+Result: **8 tests OK** (`test_upload_payload_session_fields`, `test_teleop_state_contract`, `test_operator_buttons`, …). They cover **upload contract** (`teleopControl`, `acceptedAtUtcIso`), **not** full cloud sprint scenarios.
 
 ---
 
-## Пробелы относительно спринта (для бэклога)
+## Gaps vs sprint (backlog)
 
-1. Явная машина состояний **TELEOP_READY** и лог события для API.
-2. **Bilateral confirm** и временные метки в `metadata.json` / multipart.
-3. **RTT preflight** на стороне клиента/шлюза с записью причины в `events.jsonl` и блокировкой сессии.
-4. Связка **TELEOP_TAKEOVER** / CRITICAL с записью и облаком — отдельные узлы или Backend.
+1. Explicit **TELEOP_READY** state machine and API-logged event.
+2. **Bilateral confirm** and timestamps in `metadata.json` / multipart.
+3. **RTT preflight** on client/gateway with reason in `events.jsonl` and session block.
+4. **TELEOP_TAKEOVER** / CRITICAL linkage to recording and cloud — separate nodes or Backend.

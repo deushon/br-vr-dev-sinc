@@ -1,8 +1,8 @@
 """
 Message builders for arm start pose and gripper reset.
 
-Старт/стоп стриминга рук и публикация /teleop_state (get_control / stop_control)
-обрабатываются в teleop_node.py по фронтам L_X / L_Y на топике joints (см. vr_adapter.VRData).
+Arm stream start/stop and /teleop_state publication (get_control / stop_control)
+are handled in teleop_node.py on L_X / L_Y rising edges on the joints topic (see vr_adapter.VRData).
 """
 
 from ros_robot_controller.msg import SetBusServosPosition, BusServoPosition

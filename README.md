@@ -82,7 +82,7 @@ roslaunch teleop_fetch teleop_debug.launch
 - `/teleop_fetch/poses` (`PoseArray`) - merged poses (VR/manual)
 - `/teleop_fetch/scale` (`Float64`) - sensitivity 0.0001..100 from UI
 - `/teleop_fetch/arm_servo_targets` (`SetBusServosPosition`) - IK outputs from `fast_ik_node`
-- `/teleop_state` (**latched**): см. `DOC/ARCHITECTURE.md`. Кратко: после гранта по умолчанию ждётся фронт **`~operator_arm/joint_name_lx`** на `~vr_input/joints_topic`; параметр **`~arm_stream_requires_lx:=false`** — стрим рук сразу после ACTIVE. IK: `/teleop_fetch/teleop_state`.
+- `/teleop_state` (**latched**): see `DOC/ARCHITECTURE.md`. In short: after grant, by default waits for rising edge on **`~operator_arm/joint_name_lx`** on `~vr_input/joints_topic`; **`~arm_stream_requires_lx:=false`** — arm stream right after ACTIVE. IK: `/teleop_fetch/teleop_state`.
 - `/record_sessions` (`std_msgs/String(JSON)`) - dataset lifecycle events
 
 ## Code structure

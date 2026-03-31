@@ -1,41 +1,41 @@
-# DEV_AI — контекст для агентов (br-vr-dev-sinc / VR Teleop)
+# DEV_AI — agent context (br-vr-dev-sinc / VR Teleop)
 
-## Единая точка входа экосистемы (KYR + x402 + teleop_fetch)
+## Ecosystem entry point (KYR + x402 + teleop_fetch)
 
-Запуск всей связки и ссылки на документацию: **[../br_bringup/DEV_AI.md](../br_bringup/DEV_AI.md)**, **[../br_bringup/README.md](../br_bringup/README.md)**.
+Full stack launch and doc links: **[../br_bringup/DEV_AI.md](../br_bringup/DEV_AI.md)**, **[../br_bringup/README.md](../br_bringup/README.md)**.
 
-## Назначение
+## Purpose
 
-Репозиторий с телеоперацией с Quest VR для двурукого робота (ROS 1 Noetic). Главный пакет: **`teleop_fetch`** — единая публикация команд рук в **`/kyr/bus_servo_in`** → KYR proxy → `/bus_servo/set_position`. Поток данных:
+Quest VR teleoperation for a dual-arm robot (ROS 1 Noetic). Main package: **`teleop_fetch`** — single publisher for arm commands to **`/kyr/bus_servo_in`** → KYR proxy → `/bus_servo/set_position`. Data flow:
 
-`Quest` → `vr_remapper` (в т.ч. **R_A**) → `pose_source` → `fast_ik` → `teleop_fetch` → KYR. **Голова** при ACTIVE сразу; **руки** на KYR после **L_X**. **`/teleop_state`**: старт и новая сессия — `stop_control`; **L_X** → `get_control`; **L_Y** (если был armed) → `stop_control`. IK: `/teleop_fetch/teleop_state`.
+`Quest` → `vr_remapper` (incl. **R_A**) → `pose_source` → `fast_ik` → `teleop_fetch` → KYR. **Head** moves on ACTIVE immediately; **arms** to KYR after **L_X**. **`/teleop_state`**: on node start and new session — `stop_control`; **L_X** → `get_control`; **L_Y** (if armed) → `stop_control`. IK status: `/teleop_fetch/teleop_state`.
 
-Полный стек по умолчанию: `roslaunch br_bringup ecosystem.launch` (включает `teleop.launch`). Только KYR-шлюз без IK: `with_vr_pipeline:=false`. Узел legacy `teleop_calibration` (T-pose) по умолчанию выключен; включить: `enable_legacy_teleop_calibration:=true` (пробрасывается из `ecosystem.launch` в `teleop.launch`). Руки на KYR при `arm_stream_requires_lx:=true` только после фронта `L_X` на joints — иначе см. `DOC/ARCHITECTURE.md` и параметр `~arm_stream_requires_lx`. Датасеты: по умолчанию **`dataset_recorder` + `dataset_upload_server` (:9191) + `dataset_web_server` (:3002, `web/dataset_dashboard.html`)**; выключить: `enable_dataset_recording:=false`. Peaq-клейм в `metadata.json` / multipart: **`/teleop_fetch/set_peaq_dataset_claim`**, см. [DOC/DATA_NODE_PEAQ_CLAIM_SPEC.md](DOC/DATA_NODE_PEAQ_CLAIM_SPEC.md).
+Default full stack: `roslaunch br_bringup ecosystem.launch` (includes `teleop.launch`). KYR gateway only without IK: `with_vr_pipeline:=false`. Legacy `teleop_calibration` (T-pose) off by default; enable: `enable_legacy_teleop_calibration:=true` (from `ecosystem.launch` into `teleop.launch`). Arms on KYR with `arm_stream_requires_lx:=true` only after **L_X** rising edge on joints — else see `DOC/ARCHITECTURE.md` and `~arm_stream_requires_lx`. Datasets: default **`dataset_recorder` + `dataset_upload_server` (:9191) + `dataset_web_server` (:3002, `web/dataset_dashboard.html`)**; disable: `enable_dataset_recording:=false`. Peaq claim in `metadata.json` / multipart: **`/teleop_fetch/set_peaq_dataset_claim`**, see [DOC/DATA_NODE_PEAQ_CLAIM_SPEC.md](DOC/DATA_NODE_PEAQ_CLAIM_SPEC.md).
 
-`ERR_CONNECTION_REFUSED` на **:3002**: нода `/dataset_web_server` не слушает (часто второй `roslaunch` на тот же rosmaster — см. лог `new node registered with same name`); при **`with_vr_pipeline:=false`** веб датасетов не стартует. Подробнее: [DOC/ARCHITECTURE.md](DOC/ARCHITECTURE.md) §6.
+`ERR_CONNECTION_REFUSED` on **:3002**: node `/dataset_web_server` not listening (often second `roslaunch` on same rosmaster — log `new node registered with same name`); with **`with_vr_pipeline:=false`** dataset web does not start. Details: [DOC/ARCHITECTURE.md](DOC/ARCHITECTURE.md) §6.
 
-## Ключевые пути
+## Key paths
 
-- `.gitignore` — Python-кэш (`__pycache__/`, `*.pyc`), venv, `.env`, кэши pytest/mypy, IDE, `*.log`; bytecode в репозиторий не коммитить. Публикация: [../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md](../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md).
-- `teleop_fetch/` — `vr_remapper_node.py`, `pose_source_node.py`, `teleop_node.py`, `config/vr_remapper.yaml`, датасеты `.hbr`.
+- `.gitignore` — Python cache (`__pycache__/`, `*.pyc`), venv, `.env`, pytest/mypy caches, IDE, `*.log`; do not commit bytecode. Publishing: [../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md](../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md).
+- `teleop_fetch/` — `vr_remapper_node.py`, `pose_source_node.py`, `teleop_node.py`, `config/vr_remapper.yaml`, `.hbr` datasets.
 - `my_package/` — `fast_ik_node.cpp`, `config/fast_ik.yaml`.
 
-## Документация
+## Documentation
 
-Индекс: [DOC/README.md](DOC/README.md). Обязательно читать [DOC/ARCHITECTURE.md](DOC/ARCHITECTURE.md) и [DOC/PROJECT_STATE.md](DOC/PROJECT_STATE.md). Баги и долг: [DOC/TODO.md](DOC/TODO.md). Спринт vs VR/датасеты: [DOC/SPRINT_STATUS_ROS_WORKSPACE.md](DOC/SPRINT_STATUS_ROS_WORKSPACE.md).
+Index: [DOC/README.md](DOC/README.md). Read [DOC/ARCHITECTURE.md](DOC/ARCHITECTURE.md) and [DOC/PROJECT_STATE.md](DOC/PROJECT_STATE.md). Bugs and backlog: [DOC/TODO.md](DOC/TODO.md). Sprint vs VR/datasets: [DOC/SPRINT_STATUS_ROS_WORKSPACE.md](DOC/SPRINT_STATUS_ROS_WORKSPACE.md).
 
-## Обязанности при правках
+## Responsibilities when editing
 
-1. **Документация** — обновлять все затронутые файлы в `DOC/`; новые подсистемы — новый `.md` в `DOC/` + строка в [DOC/README.md](DOC/README.md) + при необходимости правки [README.md](README.md) и этого файла.
-2. **Тесты** — для новой логики добавлять тесты и прогонять весь доступный набор пакета/воркспейса:
+1. **Documentation** — update all touched `DOC/` files; new subsystems → new `.md` in `DOC/` + line in [DOC/README.md](DOC/README.md) + README/DEV_AI if needed.
+2. **Tests** — new logic needs tests; run full package/workspace tests:
    ```bash
    cd /home/ubuntu/ros_ws && source devel/setup.bash
    catkin_make run_tests --pkg teleop_fetch
-   # при наличии тестов в my_package:
+   # if my_package has tests:
    # catkin_make run_tests --pkg my_package
    ```
-3. **Коммит** — понятное сообщение (область изменения + суть).
+3. **Commit** — clear message (area + essence).
 
 ## Workspace rule
 
-В каталоге `ros_ws` может быть `.cursor/rules/project-context.mdc` с кратким напоминанием потока VR Teleop; при расхождении с `DOC/` приоритет у **`DOC/`**.
+`ros_ws` may have `.cursor/rules/project-context.mdc` with a short VR Teleop reminder; if it conflicts with `DOC/`, **`DOC/`** wins.

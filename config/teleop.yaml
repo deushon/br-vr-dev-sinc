@@ -69,14 +69,14 @@ arm_servo_targets_topic: "/teleop_fetch/arm_servo_targets"
 # Operator sync: latched std_msgs/String — see DOC/ARCHITECTURE.md
 teleop_state_topic: "/teleop_state"
 
-# Поток рук на KYR после ACTIVE: true = ждать фронт нажатия на кнопку (см. operator_arm);
-# false = сразу стримить после гранта (как до gating, для стенда без L_X в JointState).
+# Arm stream to KYR after ACTIVE: true = wait for button rising edge (see operator_arm);
+# false = stream immediately after grant (pre-gating behaviour, bench without L_X in JointState).
 arm_stream_requires_lx: true
 
 operator_arm:
   joint_name_lx: "L_X"
   joint_name_ly: "L_Y"
 
-# Закрытие гранта KYR и оплата оператору: сервис /teleop_fetch/end_session (может вызвать RAID через rosbridge)
-# или второе нажатие L_Y после того как первое L_Y сняло arm (см. DOC/ARCHITECTURE.md § телеоп-сессия).
+# KYR grant close and operator payment: service /teleop_fetch/end_session (RAID may call via rosbridge)
+# or second L_Y after first L_Y disarmed (see DOC/ARCHITECTURE.md teleop session section).
 end_session_on_second_ly: true
