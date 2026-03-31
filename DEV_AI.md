@@ -14,11 +14,13 @@ Default full stack: `roslaunch br_bringup ecosystem.launch` (includes `teleop.la
 
 `ERR_CONNECTION_REFUSED` on **:3002**: node `/dataset_web_server` not listening (often second `roslaunch` on same rosmaster — log `new node registered with same name`); with **`with_vr_pipeline:=false`** dataset web does not start. Details: [DOC/ARCHITECTURE.md](DOC/ARCHITECTURE.md) §6.
 
+**Language (agents):** use **English** in this repository (code, comments, `DOC/`, web UI copy). In **chat**, answer in **Russian** when the human writes in Russian. Details: [../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md](../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md), workspace `.cursor/rules/project-context.mdc`.
+
 ## Key paths
 
 - `.gitignore` — Python cache (`__pycache__/`, `*.pyc`), venv, `.env`, pytest/mypy caches, IDE, `*.log`; do not commit bytecode. Publishing: [../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md](../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md).
 - `teleop_fetch/` — `vr_remapper_node.py`, `pose_source_node.py`, `teleop_node.py`, `config/vr_remapper.yaml`, `.hbr` datasets.
-- `my_package/` — `fast_ik_node.cpp`, `config/fast_ik.yaml`.
+- **`my_package`** (fast IK) — not inside this git repo: sibling Catkin package at `ros_ws/src/my_package` (`fast_ik_node.cpp`, `config/fast_ik.yaml`). `teleop.launch` uses `pkg="my_package"`; keep that repo English-only for public release (see [../br_bringup/DEV_AI.md](../br_bringup/DEV_AI.md) language policy).
 
 ## Documentation
 
