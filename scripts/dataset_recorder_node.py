@@ -18,7 +18,11 @@ from typing import Any, Dict
 import rospy
 from std_msgs.msg import String
 
-from teleop_fetch.srv import SetPeaqDatasetClaim
+try:
+    from teleop_fetch.srv import SetPeaqDatasetClaim
+except ImportError:
+    SetPeaqDatasetClaim = None  # type: ignore
+
 from teleop_fetch.episode_recorder import DatasetSessionManager
 from teleop_fetch.sensors.ros_camera import ROSCamera
 from teleop_fetch.sensors.ros_imu import ROSIMU
@@ -111,11 +115,17 @@ class DatasetRecorderNode:
             queue_size=100,
         )
         self._poll_timer = rospy.Timer(rospy.Duration(1.0), self._poll_upload_inbox)
-        rospy.Service(
-            "/teleop_fetch/set_peaq_dataset_claim",
-            SetPeaqDatasetClaim,
-            self._handle_set_peaq_dataset_claim,
-        )
+        if SetPeaqDatasetClaim is not None:
+            rospy.Service(
+                "/teleop_fetch/set_peaq_dataset_claim",
+                SetPeaqDatasetClaim,
+                self._handle_set_peaq_dataset_claim,
+            )
+        else:
+            rospy.logwarn(
+                "SetPeaqDatasetClaim srv missing (rebuild teleop_fetch); "
+                "peaq dataset merge disabled."
+            )
         rospy.loginfo("dataset_recorder ready: topic=%s", self.config["record_sessions_topic"])
         self._append_log("node_started", {"topic": self.config["record_sessions_topic"]})
         self._write_state_file()
