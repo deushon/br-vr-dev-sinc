@@ -15,6 +15,7 @@
   <build_depend>std_srvs</build_depend>
   <build_depend>ainex_interfaces</build_depend>
   <build_depend>ros_robot_controller</build_depend>
+  <build_depend>rospy_x402</build_depend>
 
   <exec_depend>message_runtime</exec_depend>
   <exec_depend>rospy</exec_depend>
@@ -24,6 +25,7 @@
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>ainex_interfaces</exec_depend>
   <exec_depend>ros_robot_controller</exec_depend>
+  <exec_depend>rospy_x402</exec_depend>
   <exec_depend>robot</exec_depend>
   <exec_depend>my_package</exec_depend>
 

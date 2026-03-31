@@ -17,6 +17,10 @@ try:
 except ImportError:
     pass
 try:
+    from rospy_x402.srv import CompleteTeleopPayment
+except ImportError:
+    CompleteTeleopPayment = None  # type: ignore
+try:
     from KYR.srv import OpenSession, CloseSession
 except ImportError:
     pass
@@ -126,6 +130,19 @@ class TeleopNode:
             self.config['joints_topic'],
         )
 
+    def _complete_teleop_payment_optional(self, receipt_payload):
+        """SOL transfer to operator via rospy_x402 (same wallet as x402_buy_service)."""
+        try:
+            rospy.wait_for_service('/x402/complete_teleop_payment', timeout=1.0)
+            proxy = rospy.ServiceProxy('/x402/complete_teleop_payment', CompleteTeleopPayment)
+            out = proxy(receipt_payload)
+            if out.success:
+                rospy.loginfo('complete_teleop_payment: %s', out.message)
+            else:
+                rospy.logwarn('complete_teleop_payment: %s', out.message)
+        except rospy.ROSException as e:
+            rospy.logdebug('complete_teleop_payment unavailable: %s', e)
+
     def _handle_receive_grant(self, req):
         if self.session_state in ['ACTIVE', 'PENDING_GRANT']:
             return ReceiveGrantResponse(success=False, message="Session already active or pending")
@@ -176,8 +193,8 @@ class TeleopNode:
         try:
             rospy.wait_for_service('/kyr/close_session', timeout=2.0)
             res = self.kyr_close_session(self.current_session_id, req.reason)
-            # The receipt processing and post-pay happens in rospy_x402, not here.
-            # Here we just notify KYR.
+            if res.success and CompleteTeleopPayment is not None:
+                self._complete_teleop_payment_optional(res.receipt_payload)
             return EndSessionResponse(success=res.success, message=res.message)
         except rospy.ServiceException as e:
             msg = f"Failed to call KYR close_session: {e}"

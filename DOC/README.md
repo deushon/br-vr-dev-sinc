@@ -5,6 +5,7 @@
 ## Архитектура стека
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — уровни абстракции, топики, поток Quest → remapper → IK → `teleop_fetch`.
+- Пост-оплата оператору SOL после `close_session`: вызов `/x402/complete_teleop_payment` из `teleop_node` (зависимость `rospy_x402`); спека ответа RAID: [../../rospy_x402/DOC/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md](../../rospy_x402/DOC/RAID_APP_TELEOP_HELP_FULL_CYCLE_X402_SPEC.md).
 
 ## Состояние проекта и задачи
 

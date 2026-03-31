@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   ainex_interfaces
   ros_robot_controller
+  rospy_x402
 )
 
 add_service_files(
@@ -27,7 +28,7 @@ generate_messages(
 )
 
 catkin_package(
-  CATKIN_DEPENDS rospy geometry_msgs sensor_msgs std_msgs std_srvs message_runtime ainex_interfaces ros_robot_controller
+  CATKIN_DEPENDS rospy geometry_msgs sensor_msgs std_msgs std_srvs message_runtime ainex_interfaces ros_robot_controller rospy_x402
 )
 
 include_directories(${catkin_INCLUDE_DIRS})
