@@ -45,7 +45,7 @@
       <input id="api-base" value="" placeholder="http://robot-ip:9191">
     </div>
     <div style="min-width:300px;">
-      <input id="data-node-url" value="http://192.168.20.53:8088" placeholder="http://data-node-ip:8088">
+      <input id="data-node-url" value="" placeholder="http://data-node-ip:8088">
     </div>
     <div style="min-width:140px;">
       <input id="upload-path" value="/sessions/upload" placeholder="/sessions/upload" title="DATA_NODE upload path">
@@ -107,7 +107,7 @@
     let lastDatasets = [];
     let pushInFlight = null;
     let autoRefreshTimer = null;
-    const DEFAULT_DATA_NODE_URL = 'http://192.168.20.53:8088';
+    const DEFAULT_DATA_NODE_URL = 'http://127.0.0.1:8088';
     const LS_DATA_NODE_URL = 'teleop_dataset_data_node_url';
 
     function apiBase() { return (document.getElementById('api-base').value || '').replace(/\/+$/, ''); }
@@ -334,7 +334,7 @@
       const saved = (localStorage.getItem(LS_DATA_NODE_URL) || '').trim();
       if (saved) {
         el.value = saved;
-      } else if (!el.value.trim() || el.value.includes('192.168.20.166')) {
+      } else if (!el.value.trim() || /192\.168\.20\./.test(el.value)) {
         el.value = DEFAULT_DATA_NODE_URL;
       }
       el.addEventListener('change', () => {

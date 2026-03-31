@@ -53,7 +53,7 @@
       <div class="panel">
         <h3>Rosbridge</h3>
         <label>WebSocket URL</label>
-        <input type="text" id="ws-url" value="ws://192.168.20.21:9090" placeholder="ws://host:9090">
+        <input type="text" id="ws-url" value="" placeholder="ws://robot-host:9090">
         <button id="btn-connect">Connect</button>
         <div id="status" class="status disconnected">Disconnected</div>
         <button id="btn-open-dataset-dashboard" class="secondary">Open dataset dashboard (full screen)</button>
@@ -61,9 +61,9 @@
       <div class="panel" style="display:none; border: 1px solid #1f6feb;">
         <h3>Dataset dashboard (robot)</h3>
         <label>Dataset API base URL</label>
-        <input type="text" id="dataset-api-base" value="http://192.168.20.21:9191" placeholder="http://robot-ip:9191">
+        <input type="text" id="dataset-api-base" value="" placeholder="http://robot-ip:9191">
         <label>DATA_NODE upload URL</label>
-        <input type="text" id="data-node-url" value="http://192.168.20.53:8088" placeholder="http://data-node-ip:8088">
+        <input type="text" id="data-node-url" value="" placeholder="http://data-node-ip:8088">
         <label>DATA_NODE upload path</label>
         <input type="text" id="data-node-upload-path" value="/sessions/upload" placeholder="/sessions/upload">
         <div class="mode-row">
@@ -525,7 +525,7 @@
       const url = document.getElementById('ws-url').value;
       const inferredApi = inferDatasetApiBase(url);
       const apiEl = document.getElementById('dataset-api-base');
-      if (apiEl && (!apiEl.value || apiEl.value.includes('192.168.20.21'))) {
+      if (apiEl && !apiEl.value.trim()) {
         apiEl.value = inferredApi;
       }
       if (ros) ros.close();
@@ -550,7 +550,7 @@
         const u = new URL(wsUrl);
         return `http://${u.hostname}:9191`;
       } catch (_) {
-        return 'http://192.168.20.21:9191';
+        return 'http://127.0.0.1:9191';
       }
     }
 

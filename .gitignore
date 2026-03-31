@@ -8,3 +8,7 @@ venv/
 .mypy_cache/
 .idea/
 .vscode/
+*.swp
+*~
+.DS_Store
+*.log
