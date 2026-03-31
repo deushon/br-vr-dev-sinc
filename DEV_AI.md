@@ -10,7 +10,9 @@
 
 `Quest` → `vr_remapper` (в т.ч. **R_A**) → `pose_source` → `fast_ik` → `teleop_fetch` → KYR. **Голова** при ACTIVE сразу; **руки** на KYR после **L_X**. **`/teleop_state`**: старт и новая сессия — `stop_control`; **L_X** → `get_control`; **L_Y** (если был armed) → `stop_control`. IK: `/teleop_fetch/teleop_state`.
 
-Полный стек по умолчанию: `roslaunch br_bringup ecosystem.launch` (включает `teleop.launch`). Только KYR-шлюз без IK: `with_vr_pipeline:=false`. Руки на KYR при `arm_stream_requires_lx:=true` только после фронта `L_X` на joints — иначе см. `DOC/ARCHITECTURE.md` и параметр `~arm_stream_requires_lx`. Датасеты: по умолчанию **`dataset_recorder` + `dataset_upload_server` (:9191) + `dataset_web_server` (:3002, `web/dataset_dashboard.html`)**; выключить: `enable_dataset_recording:=false`. Peaq-клейм в `metadata.json` / multipart: **`/teleop_fetch/set_peaq_dataset_claim`**, см. [DOC/DATA_NODE_PEAQ_CLAIM_SPEC.md](DOC/DATA_NODE_PEAQ_CLAIM_SPEC.md).
+Полный стек по умолчанию: `roslaunch br_bringup ecosystem.launch` (включает `teleop.launch`). Только KYR-шлюз без IK: `with_vr_pipeline:=false`. Узел legacy `teleop_calibration` (T-pose) по умолчанию выключен; включить: `enable_legacy_teleop_calibration:=true` (пробрасывается из `ecosystem.launch` в `teleop.launch`). Руки на KYR при `arm_stream_requires_lx:=true` только после фронта `L_X` на joints — иначе см. `DOC/ARCHITECTURE.md` и параметр `~arm_stream_requires_lx`. Датасеты: по умолчанию **`dataset_recorder` + `dataset_upload_server` (:9191) + `dataset_web_server` (:3002, `web/dataset_dashboard.html`)**; выключить: `enable_dataset_recording:=false`. Peaq-клейм в `metadata.json` / multipart: **`/teleop_fetch/set_peaq_dataset_claim`**, см. [DOC/DATA_NODE_PEAQ_CLAIM_SPEC.md](DOC/DATA_NODE_PEAQ_CLAIM_SPEC.md).
+
+`ERR_CONNECTION_REFUSED` на **:3002**: нода `/dataset_web_server` не слушает (часто второй `roslaunch` на тот же rosmaster — см. лог `new node registered with same name`); при **`with_vr_pipeline:=false`** веб датасетов не стартует. Подробнее: [DOC/ARCHITECTURE.md](DOC/ARCHITECTURE.md) §6.
 
 ## Ключевые пути
 

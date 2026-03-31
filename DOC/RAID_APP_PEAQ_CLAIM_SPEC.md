@@ -48,7 +48,7 @@ Ensure the JSON response includes a stable identifier for the created help reque
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `peaq_claim` | object | Same schema as §3. If omitted, robot uses GET flow below. |
+| `peaq_claim` | object | Same schema as §3. If omitted, robot uses GET flow below. **Interoperability:** робот принимает также **`peaqClaim`** (camelCase), если так удобнее Node. |
 
 ---
 
@@ -85,7 +85,7 @@ Minimal interoperable object (extend as needed):
 
 | Code | Body | Meaning |
 |------|------|---------|
-| 200 | `{ "peaq_claim": { … } }` | Claim ready. |
+| 200 | `{ "peaq_claim": { … } }` или `{ "peaqClaim": { … } }` | Claim ready. |
 | 404 | `{ "error": "claim_not_ready" }` (optional) | Not ready yet; robot may retry. |
 | 401 | — | Invalid secret. |
 

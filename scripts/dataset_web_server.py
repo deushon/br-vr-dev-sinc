@@ -26,7 +26,17 @@ def main():
         return
 
     os.chdir(web_root)
-    httpd = ThreadingHTTPServer((host, port), SimpleHTTPRequestHandler)
+    try:
+        httpd = ThreadingHTTPServer((host, port), SimpleHTTPRequestHandler)
+    except OSError as e:
+        rospy.logerr(
+            "dataset_web_server: cannot bind %s:%s (%s). "
+            "Another process may use the port or a second roslaunch shares this rosmaster.",
+            host,
+            port,
+            e,
+        )
+        raise
 
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
