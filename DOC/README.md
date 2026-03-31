@@ -12,6 +12,7 @@
 - [PROJECT_STATE.md](PROJECT_STATE.md) — статус пакетов и компонентов.
 - [TODO.md](TODO.md) — известные проблемы и бэклог.
 - [SPRINT_STATUS_ROS_WORKSPACE.md](SPRINT_STATUS_ROS_WORKSPACE.md) — спринтовые семафоры/тесты vs зона teleop_fetch / датасеты / VR pipeline.
+- Публикация репозитория: [../../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md](../../br_bringup/DOC/PUBLIC_RELEASE_CHECKLIST.md).
 
 ## Датасеты и формат HBR
 
