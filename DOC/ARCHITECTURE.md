@@ -134,6 +134,10 @@
 
 Цепочка: RAID → грант → **`open_session`** → **ACTIVE** → (если `arm_stream_requires_lx`) фронт **L_X** на **`~vr_input/joints_topic`** → **armed** → стрим **`/teleop_fetch/arm_servo_targets`** → **`/kyr/bus_servo_in`**. **R_A** — в **`vr_remapper`**.
 
+#### Закрытие сессии KYR и оплата оператору (x402)
+
+Грант закрывается только при **`/kyr/close_session`**, который вызывает **`teleop_fetch`** из обработчика **`/teleop_fetch/end_session`** или после **второго нажатия L_Y** (если `~end_session_on_second_ly`, по умолчанию true): первое L_Y лишь снимает arm (**сессия KYR остаётся ACTIVE**), второе L_Y завершает сессию и запускает **`/x402/complete_teleop_payment`**. Для сценария «кнопка в RAID» приложение должно дергать **`/teleop_fetch/end_session`** через rosbridge (тип `teleop_fetch/EndSession`, поле `reason`). Без этого оплата в SOL не выполняется.
+
 #### Почему руки не едут при живом fast_ik
 
 1. **Нет гранта / не ACTIVE** — `teleop_fetch` не шлёт сервы на KYR.

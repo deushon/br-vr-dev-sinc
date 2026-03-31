@@ -76,3 +76,7 @@ arm_stream_requires_lx: true
 operator_arm:
   joint_name_lx: "L_X"
   joint_name_ly: "L_Y"
+
+# Закрытие гранта KYR и оплата оператору: сервис /teleop_fetch/end_session (может вызвать RAID через rosbridge)
+# или второе нажатие L_Y после того как первое L_Y сняло arm (см. DOC/ARCHITECTURE.md § телеоп-сессия).
+end_session_on_second_ly: true

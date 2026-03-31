@@ -71,5 +71,7 @@ def load_config():
     config['arm_stream_requires_lx'] = p('arm_stream_requires_lx', True)
     config['joint_name_lx'] = p('operator_arm/joint_name_lx', 'L_X')
     config['joint_name_ly'] = p('operator_arm/joint_name_ly', 'L_Y')
+    # After first L_Y disarms arms, second L_Y ends KYR session and triggers operator SOL payment.
+    config['end_session_on_second_ly'] = p('end_session_on_second_ly', True)
 
     return config

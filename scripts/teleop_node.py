@@ -61,6 +61,8 @@ class TeleopNode:
         self.arm_stream_requires_lx = bool(self.config['arm_stream_requires_lx'])
         self._joint_lx_name = self.config['joint_name_lx']
         self._joint_ly_name = self.config['joint_name_ly']
+        self.end_session_on_second_ly = bool(self.config['end_session_on_second_ly'])
+        self._ly_disarmed_stream_once = False
         self.operator_armed = False
         self._prev_lx = 0.0
         self._prev_ly = 0.0
@@ -133,7 +135,7 @@ class TeleopNode:
     def _complete_teleop_payment_optional(self, receipt_payload):
         """SOL transfer to operator via rospy_x402 (same wallet as x402_buy_service)."""
         try:
-            rospy.wait_for_service('/x402/complete_teleop_payment', timeout=1.0)
+            rospy.wait_for_service('/x402/complete_teleop_payment', timeout=5.0)
             proxy = rospy.ServiceProxy('/x402/complete_teleop_payment', CompleteTeleopPayment)
             out = proxy(receipt_payload)
             if out.success:
@@ -141,7 +143,7 @@ class TeleopNode:
             else:
                 rospy.logwarn('complete_teleop_payment: %s', out.message)
         except rospy.ROSException as e:
-            rospy.logdebug('complete_teleop_payment unavailable: %s', e)
+            rospy.logwarn('complete_teleop_payment unavailable (no payment): %s', e)
 
     def _handle_receive_grant(self, req):
         if self.session_state in ['ACTIVE', 'PENDING_GRANT']:
@@ -158,6 +160,7 @@ class TeleopNode:
                 self.current_session_id = res.session_id
                 rospy.loginfo(f"KYR session {res.session_id} opened. State -> ACTIVE")
                 self._xy_edges_need_sync = True
+                self._ly_disarmed_stream_once = False
                 self._publish_arm_start_position()
                 self._publish_teleop_state('stop_control')
                 if self.arm_stream_requires_lx:
@@ -184,22 +187,31 @@ class TeleopNode:
             rospy.logerr(msg)
             return ReceiveGrantResponse(success=False, message=msg)
 
-    def _handle_end_session(self, req):
+    def _finalize_kyr_session_and_pay(self, reason: str):
+        """
+        ACTIVE → stop arm UI, KYR close_session, optional SOL to operator.
+        Used by /teleop_fetch/end_session and by second L_Y (if enabled).
+        """
         if self.session_state != 'ACTIVE':
-            return EndSessionResponse(success=False, message="No active session to end")
-            
+            return False, "No active session to end"
+
         self._stop_arm_control()
-        
+
         try:
-            rospy.wait_for_service('/kyr/close_session', timeout=2.0)
-            res = self.kyr_close_session(self.current_session_id, req.reason)
+            rospy.wait_for_service('/kyr/close_session', timeout=5.0)
+            res = self.kyr_close_session(self.current_session_id, reason)
             if res.success and CompleteTeleopPayment is not None:
                 self._complete_teleop_payment_optional(res.receipt_payload)
-            return EndSessionResponse(success=res.success, message=res.message)
+            return res.success, res.message
         except rospy.ServiceException as e:
             msg = f"Failed to call KYR close_session: {e}"
             rospy.logerr(msg)
-            return EndSessionResponse(success=False, message=msg)
+            return False, msg
+
+    def _handle_end_session(self, req):
+        reason = (req.reason or "").strip() or "end_session_service"
+        ok, msg = self._finalize_kyr_session_and_pay(reason)
+        return EndSessionResponse(success=ok, message=msg)
 
     def _pose_callback(self, msg):
         data = pose_array_to_vr_data(msg)
@@ -232,6 +244,17 @@ class TeleopNode:
         self._prev_ly = ly
         if y_edge and self.operator_armed:
             self._operator_y_disarm()
+        elif (
+            y_edge
+            and not self.operator_armed
+            and self.end_session_on_second_ly
+            and self._ly_disarmed_stream_once
+        ):
+            ok, msg = self._finalize_kyr_session_and_pay("operator_second_ly_press")
+            if ok:
+                rospy.loginfo("Second L_Y: KYR session closed and billing path run: %s", msg)
+            else:
+                rospy.logwarn("Second L_Y: failed to finalize session: %s", msg)
         elif x_edge and not self.operator_armed:
             self.operator_armed = True
             self._publish_teleop_state('get_control')
@@ -263,8 +286,9 @@ class TeleopNode:
         self._reset_grippers()
 
     def _operator_y_disarm(self):
-        """L_Y: stop streaming; KYR session remains ACTIVE (press L_X again to resume)."""
+        """L_Y: stop streaming; KYR session stays ACTIVE until end_session or second L_Y."""
         self.operator_armed = False
+        self._ly_disarmed_stream_once = True
         self._xy_edges_need_sync = True
         self._publish_teleop_state('stop_control')
         self._publish_arm_start_position()
